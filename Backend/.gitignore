@@ -1,0 +1,40 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Environment variables and secrets (NEVER commit these)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build and Compilation outputs (if using TypeScript or bundling)
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# IDE / System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Optional: Testing and Coverage
+coverage/
+.nyc_output
+
+# Optional: Databases (if using local SQLite or Docker volumes)
+*.db
+*.sqlite
+.docker/

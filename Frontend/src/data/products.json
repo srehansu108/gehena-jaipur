@@ -1,0 +1,809 @@
+{
+  "products": [
+    {
+      "id": 1,
+      "name": "Diamond Solitaire Ring",
+      "category": "rings",
+      "subcategory": "diamond",
+      "tags": ["bestseller", "premium"],
+      "price": 45000,
+      "originalPrice": 55000,
+      "rating": 4.8,
+      "reviews": 234,
+      "images": [
+        "/images/products/ring-1.jpg",
+        "/images/products/ring-1a.jpg",
+        "/images/products/ring-1b.jpg",
+        "/images/products/ring-1c.jpg"
+      ],
+      "metal": "18K Gold",
+      "weight": "3.2g",
+      "diamondWeight": "0.5ct",
+      "diamondClarity": "VS1",
+      "diamondColor": "F",
+      "inStock": true,
+      "stockCount": 5,
+      "badge": "Bestseller",
+      "badgeType": "bestseller",
+      "description": "Elegant diamond solitaire ring crafted in 18K gold. Perfect for engagements and anniversaries. Each diamond is ethically sourced and certified by IGI.",
+      "longDescription": "Our Diamond Solitaire Ring is a timeless piece that symbolizes eternal love. The round brilliant cut diamond is set in a classic four-prong setting on a delicate 18K gold band. Every diamond comes with an IGI certificate guaranteeing its authenticity and quality. This ring is perfect for engagements, anniversaries, or as a special gift for someone dear.",
+      "features": [
+        "IGI Certified Diamond",
+        "Hallmarked 18K Gold",
+        "Free Lifetime Sizing",
+        "Certificate of Authenticity",
+        "Complimentary Gift Box",
+        "Free Insurance for 1 Year"
+      ],
+      "specifications": {
+        "Metal Type": "18K Gold",
+        "Metal Purity": "750",
+        "Total Weight": "3.2g",
+        "Diamond Weight": "0.5ct",
+        "Diamond Shape": "Round Brilliant",
+        "Diamond Clarity": "VS1",
+        "Diamond Color": "F",
+        "Setting Type": "Prong Setting",
+        "Ring Size": "Adjustable (5-8)",
+        "Making Charges": "₹4,500"
+      },
+      "careInstructions": [
+        "Avoid contact with chemicals and perfumes",
+        "Store in the provided jewellery box",
+        "Clean with soft cloth regularly",
+        "Remove while sleeping or exercising"
+      ],
+      "shippingInfo": {
+        "free": true,
+        "estimatedDays": "3-5 business days",
+        "returnable": true,
+        "returnDays": 30,
+        "cod": true
+      },
+      "warranty": "Lifetime warranty on making and diamonds",
+      "brand": "Luxury Jewels",
+      "sku": "LJ-DSR-001",
+      "createdAt": "2024-01-15",
+      "discount": 18
+    },
+    {
+      "id": 2,
+      "name": "Gold Temple Necklace",
+      "category": "necklaces",
+      "subcategory": "temple",
+      "tags": ["bestseller", "festival"],
+      "price": 85000,
+      "originalPrice": 105000,
+      "rating": 4.9,
+      "reviews": 189,
+      "images": [
+        "/images/products/necklace-1.jpg",
+        "/images/products/necklace-1a.jpg",
+        "/images/products/necklace-1b.jpg"
+      ],
+      "metal": "22K Gold",
+      "weight": "25g",
+      "diamondWeight": null,
+      "diamondClarity": null,
+      "diamondColor": null,
+      "inStock": true,
+      "stockCount": 3,
+      "badge": "-20%",
+      "badgeType": "sale",
+      "description": "Traditional temple necklace with intricate deity motifs. A masterpiece for special occasions.",
+      "longDescription": "This magnificent Gold Temple Necklace is a celebration of traditional Indian craftsmanship. Adorned with intricate deity motifs and detailed temple work, this piece is perfect for weddings, festivals, and special ceremonies. The necklace features a adjustable chain and secure locking system for comfortable wear.",
+      "features": [
+        "Hallmarked 22K Gold",
+        "Traditional Temple Design",
+        "Secure Locking System",
+        "Adjustable Chain Length",
+        "Antique Finish",
+        "Comes with Matching Earrings"
+      ],
+      "specifications": {
+        "Metal Type": "22K Gold",
+        "Metal Purity": "916",
+        "Total Weight": "25g",
+        "Necklace Length": "18 inches",
+        "Pendant Size": "3 x 2 inches",
+        "Closure Type": "Hook and Eye",
+        "Making Charges": "₹8,500"
+      },
+      "careInstructions": [
+        "Keep away from moisture and humidity",
+        "Clean with dry soft cloth only",
+        "Store in fabric-lined jewellery box",
+        "Avoid contact with perfumes and cosmetics"
+      ],
+      "shippingInfo": {
+        "free": true,
+        "estimatedDays": "3-5 business days",
+        "returnable": true,
+        "returnDays": 30,
+        "cod": true
+      },
+      "warranty": "5 years warranty on making",
+      "brand": "Heritage Collection",
+      "sku": "HC-TN-002",
+      "createdAt": "2024-02-10",
+      "discount": 19
+    },
+    {
+      "id": 3,
+      "name": "Pearl Drop Earrings",
+      "category": "earrings",
+      "subcategory": "pearl",
+      "tags": ["new-arrival", "everyday"],
+      "price": 25000,
+      "originalPrice": 32000,
+      "rating": 4.7,
+      "reviews": 456,
+      "images": [
+        "/images/products/earrings-1.jpg",
+        "/images/products/earrings-1a.jpg",
+        "/images/products/earrings-1b.jpg"
+      ],
+      "metal": "14K Gold",
+      "weight": "4.5g",
+      "diamondWeight": null,
+      "diamondClarity": null,
+      "diamondColor": null,
+      "inStock": true,
+      "stockCount": 15,
+      "badge": "New",
+      "badgeType": "new",
+      "description": "Elegant pearl drop earrings with gold detailing. Perfect for daily wear and parties.",
+      "longDescription": "Beautiful pearl drop earrings crafted in 14K gold. Each earring features a lustrous natural freshwater pearl that adds elegance to any outfit. The lightweight design makes them perfect for all-day wear, while the secure push-back closure ensures they stay in place.",
+      "features": [
+        "Natural Freshwater Pearls",
+        "Hypoallergenic 14K Gold",
+        "Lightweight Design",
+        "Secure Push-back Closure",
+        "Perfect for Daily Wear",
+        "Comes with Gift Box"
+      ],
+      "specifications": {
+        "Metal Type": "14K Gold",
+        "Metal Purity": "585",
+        "Total Weight": "4.5g",
+        "Pearl Type": "Freshwater Pearl",
+        "Pearl Size": "8mm",
+        "Pearl Shape": "Round",
+        "Closure Type": "Push Back",
+        "Drop Length": "1.5 inches"
+      },
+      "careInstructions": [
+        "Store separately to avoid scratches",
+        "Clean with soft damp cloth",
+        "Avoid contact with hairspray and perfumes",
+        "Remove before swimming or bathing"
+      ],
+      "shippingInfo": {
+        "free": true,
+        "estimatedDays": "2-4 business days",
+        "returnable": true,
+        "returnDays": 30,
+        "cod": true
+      },
+      "warranty": "2 years warranty on pearls and metal",
+      "brand": "Elegant Pearls",
+      "sku": "EP-PD-003",
+      "createdAt": "2024-03-01",
+      "discount": 22
+    },
+    {
+      "id": 4,
+      "name": "Diamond Bangles Set",
+      "category": "bangles",
+      "subcategory": "diamond",
+      "tags": ["limited", "premium"],
+      "price": 125000,
+      "originalPrice": 150000,
+      "rating": 4.9,
+      "reviews": 167,
+      "images": [
+        "/images/products/bangles-1.jpg",
+        "/images/products/bangles-1a.jpg",
+        "/images/products/bangles-1b.jpg",
+        "/images/products/bangles-1c.jpg"
+      ],
+      "metal": "18K Gold",
+      "weight": "18g",
+      "diamondWeight": "1.2ct",
+      "diamondClarity": "VS2",
+      "diamondColor": "G",
+      "inStock": false,
+      "stockCount": 0,
+      "badge": "Limited",
+      "badgeType": "limited",
+      "description": "Set of 3 diamond-studded bangles. Makes your hand look elegant and royal.",
+      "longDescription": "This exquisite set of 3 diamond bangles is designed for the modern woman who appreciates luxury. Each bangle features channel-set diamonds that sparkle from every angle. The set includes two thin bangles and one chunky bangle, perfect for stacking or wearing individually.",
+      "features": [
+        "Set of 3 Bangles",
+        "IGI Certified Diamonds",
+        "Adjustable Size",
+        "Lifetime Free Polishing",
+        "Hallmarked 18K Gold",
+        "Free Insurance for 6 Months"
+      ],
+      "specifications": {
+        "Metal Type": "18K Gold",
+        "Metal Purity": "750",
+        "Total Weight": "18g",
+        "Diamond Weight": "1.2ct",
+        "Diamond Clarity": "VS2",
+        "Diamond Color": "G",
+        "Setting Type": "Channel Setting",
+        "Bangle Size": "2.4 inches diameter",
+        "Making Charges": "₹12,000"
+      },
+      "careInstructions": [
+        "Remove while doing household chores",
+        "Clean with jewelry cleaner monthly",
+        "Store in individual pouches",
+        "Avoid impact and hard knocks"
+      ],
+      "shippingInfo": {
+        "free": true,
+        "estimatedDays": "5-7 business days",
+        "returnable": true,
+        "returnDays": 15,
+        "cod": false
+      },
+      "warranty": "Lifetime warranty on diamonds",
+      "brand": "Diamond Essence",
+      "sku": "DE-DB-004",
+      "createdAt": "2024-01-20",
+      "discount": 17
+    },
+    {
+      "id": 5,
+      "name": "Modern Art Pendant",
+      "category": "pendants",
+      "subcategory": "modern",
+      "tags": ["new-arrival", "trendy"],
+      "price": 18500,
+      "originalPrice": 22000,
+      "rating": 4.6,
+      "reviews": 89,
+      "images": [
+        "/images/products/pendant-1.jpg",
+        "/images/products/pendant-1a.jpg"
+      ],
+      "metal": "14K Gold",
+      "weight": "2.8g",
+      "diamondWeight": null,
+      "diamondClarity": null,
+      "diamondColor": null,
+      "inStock": true,
+      "stockCount": 8,
+      "badge": "New",
+      "badgeType": "new",
+      "description": "Contemporary art design pendant with geometric patterns.",
+      "longDescription": "Express your modern style with this contemporary art pendant. The geometric pattern creates a unique visual appeal, while the 14K gold construction ensures durability. Comes with a matching gold chain, making it ready to wear right out of the box.",
+      "features": [
+        "Modern Geometric Design",
+        "Chain Included (18 inches)",
+        "Perfect Gifting Option",
+        "Lightweight Comfort",
+        "Hallmarked 14K Gold",
+        "Trendy Statement Piece"
+      ],
+      "specifications": {
+        "Metal Type": "14K Gold",
+        "Metal Purity": "585",
+        "Total Weight": "2.8g",
+        "Chain Length": "18 inches",
+        "Pendant Size": "1.2 x 0.8 inches",
+        "Closure Type": "Lobster Clasp",
+        "Design Style": "Contemporary Abstract"
+      },
+      "careInstructions": [
+        "Remove before sleeping",
+        "Clean with jewelry cloth",
+        "Avoid exposure to chemicals",
+        "Store in dust-free pouch"
+      ],
+      "shippingInfo": {
+        "free": true,
+        "estimatedDays": "2-4 business days",
+        "returnable": true,
+        "returnDays": 30,
+        "cod": true
+      },
+      "warranty": "3 years warranty",
+      "brand": "Modern Muse",
+      "sku": "MM-MP-005",
+      "createdAt": "2024-03-10",
+      "discount": 16
+    },
+    {
+      "id": 6,
+      "name": "Temple Jewellery Set",
+      "category": "sets",
+      "subcategory": "temple",
+      "tags": ["bestseller", "wedding"],
+      "price": 95000,
+      "originalPrice": 120000,
+      "rating": 5.0,
+      "reviews": 234,
+      "images": [
+        "/images/products/set-1.jpg",
+        "/images/products/set-1a.jpg",
+        "/images/products/set-1b.jpg",
+        "/images/products/set-1c.jpg"
+      ],
+      "metal": "22K Gold",
+      "weight": "45g",
+      "diamondWeight": null,
+      "diamondClarity": null,
+      "diamondColor": null,
+      "inStock": true,
+      "stockCount": 2,
+      "badge": "Trending",
+      "badgeType": "bestseller",
+      "description": "Complete bridal set with necklace, earrings, and maang tikka.",
+      "longDescription": "This complete bridal set is perfect for the modern bride who wants to look traditional yet elegant. The set includes a heavy temple necklace, matching Jhumka earrings, and a beautiful maang tikka. Each piece is intricately crafted with traditional motifs and antique finish.",
+      "features": [
+        "3-Piece Bridal Set",
+        "Antique Finish",
+        "Perfect for Weddings",
+        "Intricate Temple Work",
+        "Adjustable Chain",
+        "Comes with Velvet Box"
+      ],
+      "specifications": {
+        "Metal Type": "22K Gold",
+        "Metal Purity": "916",
+        "Total Weight": "45g",
+        "Necklace Length": "20 inches",
+        "Earring Length": "2.5 inches",
+        "Maang Tikka Drop": "3 inches",
+        "Making Charges": "₹15,000",
+        "Set Includes": "Necklace + Earrings + Maang Tikka"
+      },
+      "careInstructions": [
+        "Professional cleaning recommended",
+        "Store in original box",
+        "Avoid contact with makeup",
+        "Remove before sleeping"
+      ],
+      "shippingInfo": {
+        "free": true,
+        "estimatedDays": "5-7 business days",
+        "returnable": false,
+        "returnDays": 0,
+        "cod": false
+      },
+      "warranty": "Lifetime free maintenance",
+      "brand": "Bridal Treasures",
+      "sku": "BT-TJS-006",
+      "createdAt": "2024-02-05",
+      "discount": 21
+    },
+    {
+      "id": 7,
+      "name": "Rose Gold Bracelet",
+      "category": "bracelets",
+      "subcategory": "rose-gold",
+      "tags": ["sale", "exclusive"],
+      "price": 32000,
+      "originalPrice": 40000,
+      "rating": 4.7,
+      "reviews": 145,
+      "images": [
+        "/images/products/bracelet-1.jpg",
+        "/images/products/bracelet-1a.jpg",
+        "/images/products/bracelet-1b.jpg"
+      ],
+      "metal": "14K Rose Gold",
+      "weight": "6.5g",
+      "diamondWeight": "0.3ct",
+      "diamondClarity": "SI1",
+      "diamondColor": "H",
+      "inStock": true,
+      "stockCount": 6,
+      "badge": "Sale",
+      "badgeType": "sale",
+      "description": "Elegant rose gold bracelet with diamond accents.",
+      "longDescription": "The perfect blend of modern design and classic elegance. This rose gold bracelet features a delicate chain with diamond-studded charms. The warm rose gold complements all skin tones, making it a versatile addition to any jewelry collection.",
+      "features": [
+        "Adjustable Length",
+        "Diamond Certified",
+        "Rose Gold Finish",
+        "Secure Clasp",
+        "Perfect for Gifting",
+        "Lightweight Design"
+      ],
+      "specifications": {
+        "Metal Type": "14K Rose Gold",
+        "Metal Purity": "585",
+        "Total Weight": "6.5g",
+        "Diamond Weight": "0.3ct",
+        "Diamond Clarity": "SI1",
+        "Diamond Color": "H",
+        "Bracelet Length": "7 inches (adjustable)",
+        "Closure Type": "Lobster Clasp"
+      },
+      "careInstructions": [
+        "Remove before showering",
+        "Clean with mild soap solution",
+        "Store in soft pouch",
+        "Avoid harsh chemicals"
+      ],
+      "shippingInfo": {
+        "free": true,
+        "estimatedDays": "3-5 business days",
+        "returnable": true,
+        "returnDays": 30,
+        "cod": true
+      },
+      "warranty": "5 years warranty",
+      "brand": "Rose Luxe",
+      "sku": "RL-RGB-007",
+      "createdAt": "2024-01-25",
+      "discount": 20
+    },
+    {
+      "id": 8,
+      "name": "Antique Necklace",
+      "category": "necklaces",
+      "subcategory": "antique",
+      "tags": ["limited", "heritage"],
+      "price": 75000,
+      "originalPrice": 90000,
+      "rating": 4.8,
+      "reviews": 98,
+      "images": [
+        "/images/products/necklace-2.jpg",
+        "/images/products/necklace-2a.jpg",
+        "/images/products/necklace-2b.jpg"
+      ],
+      "metal": "22K Gold",
+      "weight": "20g",
+      "diamondWeight": null,
+      "diamondClarity": null,
+      "diamondColor": null,
+      "inStock": true,
+      "stockCount": 4,
+      "badge": "Limited",
+      "badgeType": "limited",
+      "description": "Vintage-inspired antique necklace with kundan work.",
+      "longDescription": "Step back in time with this vintage-inspired antique necklace. Featuring intricate kundan work and traditional design elements, this piece captures the essence of royal Indian jewellery. The antique finish gives it a timeless appeal that never goes out of style.",
+      "features": [
+        "Kundan Work",
+        "Heritage Design",
+        "Perfect for Weddings",
+        "Antique Finish",
+        "Secure Lock",
+        "Heirloom Quality"
+      ],
+      "specifications": {
+        "Metal Type": "22K Gold",
+        "Metal Purity": "916",
+        "Total Weight": "20g",
+        "Necklace Length": "16 inches",
+        "Pendant Size": "2.5 x 2 inches",
+        "Kundan Stones": "Polki and Emerald",
+        "Making Charges": "₹10,000",
+        "Closure Type": "Adjustable Hook"
+      },
+      "careInstructions": [
+        "Store in air-tight container",
+        "Avoid water contact",
+        "Professional cleaning only",
+        "Handle with care"
+      ],
+      "shippingInfo": {
+        "free": true,
+        "estimatedDays": "5-7 business days",
+        "returnable": true,
+        "returnDays": 15,
+        "cod": false
+      },
+      "warranty": "7 years warranty on kundan work",
+      "brand": "Royal Heritage",
+      "sku": "RH-AN-008",
+      "createdAt": "2024-02-15",
+      "discount": 17
+    },
+    {
+      "id": 9,
+      "name": "Mangalsutra",
+      "category": "mangalsutra",
+      "subcategory": "traditional",
+      "tags": ["bestseller", "wedding"],
+      "price": 55000,
+      "originalPrice": 68000,
+      "rating": 4.9,
+      "reviews": 312,
+      "images": [
+        "/images/categories/mangalsutra.png",
+        "/images/products/mangalsutra-1a.jpg",
+        "/images/products/mangalsutra-1b.jpg"
+      ],
+      "metal": "18K Gold",
+      "weight": "8g",
+      "diamondWeight": "0.2ct",
+      "diamondClarity": "VS2",
+      "diamondColor": "F",
+      "inStock": true,
+      "stockCount": 7,
+      "badge": "Bestseller",
+      "badgeType": "bestseller",
+      "description": "Elegant mangalsutra with black beads and diamond pendant.",
+      "longDescription": "This beautiful mangalsutra combines traditional design with modern elegance. The diamond-studded pendant features a stunning center stone, while the black beads symbolize protection and prosperity. The adjustable chain ensures comfortable wear for daily use or special occasions.",
+      "features": [
+        "Adjustable Chain",
+        "Diamond Center Pendant",
+        "Traditional Design",
+        "Black Beads (Pure)",
+        "Secure Locking System",
+        "Perfect for Daily Wear"
+      ],
+      "specifications": {
+        "Metal Type": "18K Gold",
+        "Metal Purity": "750",
+        "Total Weight": "8g",
+        "Diamond Weight": "0.2ct",
+        "Diamond Clarity": "VS2",
+        "Diamond Color": "F",
+        "Pendant Size": "1.5 x 1 inch",
+        "Chain Length": "22 inches (adjustable)",
+        "Bead Size": "3mm",
+        "Making Charges": "₹5,000"
+      },
+      "careInstructions": [
+        "Remove while sleeping",
+        "Clean with soft brush",
+        "Avoid pulling the chain",
+        "Store flat to prevent tangling",
+        "Professional check-up yearly"
+      ],
+      "shippingInfo": {
+        "free": true,
+        "estimatedDays": "3-5 business days",
+        "returnable": true,
+        "returnDays": 30,
+        "cod": true
+      },
+      "warranty": "Lifetime warranty on diamonds and making",
+      "brand": "Sacred Bonds",
+      "sku": "SB-MS-009",
+      "createdAt": "2024-02-20",
+      "discount": 19
+    },
+    {
+      "id": 10,
+      "name": "Emerald Statement Necklace",
+      "category": "necklaces",
+      "subcategory": "gemstone",
+      "tags": ["exclusive", "premium", "new-arrival"],
+      "price": 120000,
+      "originalPrice": 160000,
+      "rating": 5.0,
+      "reviews": 56,
+      "images": [
+        "/images/products/Emerald1.jpg",
+        "/images/products/Emerald2.jpg"
+      ],
+      "metal": "22K Gold",
+      "weight": "30g",
+      "diamondWeight": "0.8ct",
+      "diamondClarity": "VS1",
+      "diamondColor": "E",
+      "inStock": true,
+      "stockCount": 2,
+      "badge": "Exclusive",
+      "badgeType": "exclusive",
+      "description": "Magnificent emerald and diamond necklace for royalty.",
+      "longDescription": "This breathtaking emerald necklace features genuine Colombian emeralds set in 22K gold. Each emerald is carefully selected for its deep green color and exceptional clarity. The intricate design showcases traditional craftsmanship at its finest, making this piece a true heirloom.",
+      "features": [
+        "Genuine Colombian Emeralds",
+        "IGI Certified Diamonds",
+        "Handcrafted Design",
+        "Adjustable Length",
+        "Velvet Gift Box Included",
+        "Certificate of Authenticity"
+      ],
+      "specifications": {
+        "Metal Type": "22K Gold",
+        "Metal Purity": "916",
+        "Total Weight": "30g",
+        "Emerald Weight": "8ct",
+        "Diamond Weight": "0.8ct",
+        "Diamond Clarity": "VS1",
+        "Diamond Color": "E",
+        "Necklace Length": "18 inches",
+        "Making Charges": "₹18,000"
+      },
+      "careInstructions": [
+        "Professional cleaning only",
+        "Store in original box",
+        "Avoid direct sunlight",
+        "Remove before sleeping"
+      ],
+      "shippingInfo": {
+        "free": true,
+        "estimatedDays": "5-7 business days",
+        "returnable": true,
+        "returnDays": 15,
+        "cod": false
+      },
+      "warranty": "Lifetime warranty on gemstones",
+      "brand": "Gem Palace",
+      "sku": "GP-EN-010",
+      "createdAt": "2024-03-05",
+      "discount": 25
+    },
+    {
+      "id": 11,
+      "name": "Ruby Pendant Set",
+      "category": "sets",
+      "subcategory": "gemstone",
+      "tags": ["exclusive", "sale"],
+      "price": 95000,
+      "originalPrice": 135000,
+      "rating": 4.8,
+      "reviews": 78,
+      "images": [
+        "/images/products/ruby1.jpg",
+        "/images/products/ruby2.jpg"
+      ],
+      "metal": "18K Gold",
+      "weight": "15g",
+      "diamondWeight": "0.4ct",
+      "diamondClarity": "VS2",
+      "diamondColor": "G",
+      "inStock": true,
+      "stockCount": 5,
+      "badge": "Sale",
+      "badgeType": "sale",
+      "description": "Elegant ruby pendant with matching earrings.",
+      "longDescription": "This stunning ruby set includes a beautiful pendant and matching earrings. The pigeon blood red rubies are ethically sourced and set in 18K gold with diamond accents. Perfect for festive occasions and special celebrations.",
+      "features": [
+        "2-Piece Set (Pendant + Earrings)",
+        "Natural Rubies",
+        "Diamond Accents",
+        "Chain Included",
+        "Gift Box Included",
+        "Certificate Included"
+      ],
+      "specifications": {
+        "Metal Type": "18K Gold",
+        "Metal Purity": "750",
+        "Total Weight": "15g",
+        "Ruby Weight": "3ct",
+        "Diamond Weight": "0.4ct",
+        "Pendant Size": "1.8 x 1.2 inches",
+        "Earring Length": "1 inch",
+        "Chain Length": "18 inches"
+      },
+      "careInstructions": [
+        "Clean with soft cloth",
+        "Avoid ultrasonic cleaners",
+        "Store separately",
+        "Remove before swimming"
+      ],
+      "shippingInfo": {
+        "free": true,
+        "estimatedDays": "3-5 business days",
+        "returnable": true,
+        "returnDays": 30,
+        "cod": true
+      },
+      "warranty": "5 years warranty",
+      "brand": "Ruby Romance",
+      "sku": "RR-RPS-011",
+      "createdAt": "2024-02-28",
+      "discount": 30
+    },
+    {
+      "id": 12,
+      "name": "Diamond Halo Ring",
+      "category": "rings",
+      "subcategory": "diamond",
+      "tags": ["new-arrival", "bestseller"],
+      "price": 68000,
+      "originalPrice": 85000,
+      "rating": 4.9,
+      "reviews": 124,
+      "images": [
+        "/images/products/HaloRing1.jpg",
+        "/images/products/HaloRing2.jpg"
+      ],
+      "metal": "18K White Gold",
+      "weight": "4.2g",
+      "diamondWeight": "0.75ct",
+      "diamondClarity": "VS1",
+      "diamondColor": "F",
+      "inStock": true,
+      "stockCount": 4,
+      "badge": "New",
+      "badgeType": "new",
+      "description": "Stunning diamond halo engagement ring.",
+      "longDescription": "This breathtaking halo ring features a center diamond surrounded by a sparkling halo of smaller diamonds. The 18K white gold setting enhances the brilliance of each stone, creating a truly mesmerizing piece that captures light from every angle.",
+      "features": [
+        "Center Diamond 0.5ct",
+        "Halo Diamonds 0.25ct",
+        "IGI Certified",
+        "White Gold Setting",
+        "Free Resizing",
+        "Lifetime Warranty"
+      ],
+      "specifications": {
+        "Metal Type": "18K White Gold",
+        "Metal Purity": "750",
+        "Total Weight": "4.2g",
+        "Diamond Weight": "0.75ct",
+        "Diamond Clarity": "VS1",
+        "Diamond Color": "F",
+        "Setting Type": "Halo with Prongs",
+        "Ring Size": "Adjustable 6-8"
+      },
+      "careInstructions": [
+        "Regular professional cleaning",
+        "Avoid harsh chemicals",
+        "Store in soft pouch",
+        "Remove during heavy work"
+      ],
+      "shippingInfo": {
+        "free": true,
+        "estimatedDays": "2-4 business days",
+        "returnable": true,
+        "returnDays": 30,
+        "cod": true
+      },
+      "warranty": "Lifetime warranty",
+      "brand": "Diamond Dreams",
+      "sku": "DD-DHR-012",
+      "createdAt": "2024-03-08",
+      "discount": 20
+    }
+  ],
+  
+  "categories": [
+    { "id": "rings", "name": "Rings", "icon": "💍", "count": 0 },
+    { "id": "necklaces", "name": "Necklaces", "icon": "📿", "count": 0 },
+    { "id": "earrings", "name": "Earrings", "icon": "👂", "count": 0 },
+    { "id": "bangles", "name": "Bangles", "icon": "✨", "count": 0 },
+    { "id": "pendants", "name": "Pendants", "icon": "🔮", "count": 0 },
+    { "id": "bracelets", "name": "Bracelets", "icon": "💫", "count": 0 },
+    { "id": "sets", "name": "Sets", "icon": "💎", "count": 0 },
+    { "id": "mangalsutra", "name": "Mangalsutra", "icon": "🕉️", "count": 0 }
+  ],
+
+  "heroSlides": [
+    { "id": 1, "title": "Exquisite Diamond Collection", "subtitle": "Up to 40% off", "image": "/images/hero/diamond.jpg", "cta": "Shop Now" },
+    { "id": 2, "title": "Wedding Special", "subtitle": "Complete Bridal Sets", "image": "/images/hero/wedding.jpg", "cta": "Explore Now" },
+    { "id": 3, "title": "Festival Offers", "subtitle": "Free Shipping + Gifts", "image": "/images/hero/festival.jpg", "cta": "Grab Deal" }
+  ],
+
+  "offers": [
+    { "code": "WELCOME10", "discount": "10% off", "minAmount": "₹5,000", "description": "First purchase discount" },
+    { "code": "FREESHIP", "discount": "Free Shipping", "minAmount": "₹50,000", "description": "Complimentary delivery" },
+    { "code": "EXCHANGE", "discount": "0% deduction", "minAmount": "Old gold exchange", "description": "Best exchange rates" },
+    { "code": "DIWALI20", "discount": "20% off", "minAmount": "₹25,000", "description": "Festival special" }
+  ],
+
+  "trustBadges": [
+    { "icon": "Shield", "text": "100% Certified", "color": "text-blue-600" },
+    { "icon": "Award", "text": "Hallmarked", "color": "text-amber-600" },
+    { "icon": "Clock", "text": "Lifetime Warranty", "color": "text-green-600" },
+    { "icon": "Truck", "text": "Free Shipping", "color": "text-purple-600" }
+  ],
+
+  "paymentMethods": [
+    { "id": "card", "name": "Credit/Debit Card", "icon": "CreditCard" },
+    { "id": "upi", "name": "UPI", "icon": "Wallet" },
+    { "id": "netbanking", "name": "Net Banking", "icon": "Building2" },
+    { "id": "cod", "name": "Cash on Delivery", "icon": "Wallet" }
+  ],
+
+  "sizeOptions": {
+    "rings": ["5", "6", "7", "8", "9", "10"],
+    "necklaces": ["16 inch", "18 inch", "20 inch", "22 inch"]
+  },
+
+  "emiOptions": [3, 6, 9, 12]
+}
