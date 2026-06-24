@@ -1,5 +1,2 @@
 # public/_redirects
 /* /index.html 200
-
-# API routes - don't redirect these (they should go to your backend)
-/api/* https://gehena-jaipur.onrender.com/api/:splat 200
