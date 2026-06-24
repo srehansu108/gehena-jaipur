@@ -61,7 +61,7 @@ const ImageGallery = ({ images, productName }) => {
   };
 
   return (
-    <div className="sticky top-24">
+    <div className="initial top-24">
       {/* Main Image */}
       <div 
         className={`relative h-96 md:h-[500px] rounded-xl overflow-hidden bg-gray-100 ${isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
