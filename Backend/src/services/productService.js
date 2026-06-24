@@ -259,7 +259,21 @@ class ProductService {
       return [];
     }
   }
-
+async getProductBySku(sku) {
+  try {
+    console.log('🔍 getProductBySku called with:', sku);
+    
+    if (!sku) {
+      return null;
+    }
+    
+    const product = await Product.findOne({ sku: sku }).lean();
+    return product;
+  } catch (error) {
+    console.error('❌ Error in getProductBySku:', error);
+    return null;
+  }
+}
   async clearCache() {
     // Implement if you have caching
     console.log('🗑️ Cache cleared');
