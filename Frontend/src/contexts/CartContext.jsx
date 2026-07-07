@@ -1,6 +1,8 @@
 // src/contexts/CartContext.jsx
+
 import { createContext, useContext, useState, useEffect } from 'react';
 import * as api from '../services/api';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 
@@ -8,17 +10,36 @@ export function CartProvider({ children }) {
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
   const [itemCount, setItemCount] = useState(0);
+  const { isAuthenticated, token, user } = useAuth();
 
-  // Fetch cart on mount
+  // Check if we're on an admin page
+  const isAdminPage = window.location.pathname.startsWith('/admin');
+  // Check if user is admin
+  const isAdmin = user?.isAdmin || user?.role === 'super_admin';
+
+  // Fetch cart only when authenticated and NOT on admin pages
   useEffect(() => {
-    fetchCart();
-  }, []);
+    // Only fetch cart if:
+    // 1. User is authenticated
+    // 2. NOT on admin page
+    // 3. NOT an admin user
+    if (isAuthenticated && token && !isAdminPage && !isAdmin) {
+      fetchCart();
+    } else {
+      // Reset cart state for admin pages or unauthenticated users
+      setCart(null);
+      setItemCount(0);
+      setLoading(false);
+    }
+  }, [isAuthenticated, token, isAdminPage, isAdmin]);
 
   // Update item count whenever cart changes
   useEffect(() => {
-    if (cart) {
-      const count = cart.items.reduce((sum, item) => sum + item.quantity, 0);
+    if (cart && cart.items) {
+      const count = cart.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
       setItemCount(count);
+    } else {
+      setItemCount(0);
     }
   }, [cart]);
 
@@ -28,9 +49,15 @@ export function CartProvider({ children }) {
       const response = await api.getCart();
       if (response.success) {
         setCart(response.data);
+      } else {
+        setCart(null);
       }
     } catch (error) {
-      console.error('Failed to fetch cart:', error);
+      // Silent fail for 401 - user is just not logged in
+      if (error.response?.status !== 401) {
+        console.error('Failed to fetch cart:', error);
+      }
+      setCart(null);
     } finally {
       setLoading(false);
     }

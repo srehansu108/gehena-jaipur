@@ -1,4 +1,5 @@
 // src/contexts/WishlistContext.jsx
+
 import { createContext, useContext, useState, useEffect } from 'react';
 import * as api from '../services/api';
 import { useAuth } from './AuthContext';
@@ -6,7 +7,7 @@ import { useAuth } from './AuthContext';
 const WishlistContext = createContext();
 
 export function WishlistProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, token, user } = useAuth();
   const [wishlist, setWishlist] = useState({
     items: [],
     products: [],
@@ -15,16 +16,25 @@ export function WishlistProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [wishlistIds, setWishlistIds] = useState(new Set());
 
-  // Fetch wishlist on mount and when auth changes
+  // Check if we're on an admin page
+  const isAdminPage = window.location.pathname.startsWith('/admin');
+  // Check if user is admin
+  const isAdmin = user?.isAdmin || user?.role === 'super_admin';
+
+  // Fetch wishlist only when authenticated and NOT on admin pages
   useEffect(() => {
-    if (isAuthenticated) {
+    // Only fetch wishlist if:
+    // 1. User is authenticated
+    // 2. NOT on admin page
+    // 3. NOT an admin user
+    if (isAuthenticated && token && !isAdminPage && !isAdmin) {
       fetchWishlist();
     } else {
       setWishlist({ items: [], products: [], count: 0 });
       setWishlistIds(new Set());
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, token, isAdminPage, isAdmin]);
 
   // Fetch wishlist from API
   const fetchWishlist = async () => {
@@ -35,35 +45,27 @@ export function WishlistProvider({ children }) {
       console.log('📦 Wishlist API Response:', response);
       
       if (response.success) {
-        // ✅ FIX: Handle different response structures
         let items = [];
         let products = [];
         let count = 0;
         
         // Check different possible response structures
         if (response.data) {
-          // Structure 1: { success: true, data: { items: [...], products: [...], count: 0 } }
           if (response.data.items && Array.isArray(response.data.items)) {
             items = response.data.items;
             products = response.data.products || [];
             count = response.data.count || items.length;
-          } 
-          // Structure 2: { success: true, data: { wishlist: { items: [...] } } }
-          else if (response.data.wishlist && response.data.wishlist.items) {
+          } else if (response.data.wishlist && response.data.wishlist.items) {
             items = response.data.wishlist.items;
             products = response.data.wishlist.products || [];
             count = response.data.wishlist.count || items.length;
-          }
-          // Structure 3: { success: true, data: { items: [...], wishlistId: ... } }
-          else if (response.data.wishlistId) {
-            // This might be a different structure
+          } else if (response.data.wishlistId) {
             items = response.data.items || [];
             products = response.data.products || [];
             count = response.data.count || items.length;
           }
         }
         
-        // If still no items, try direct access
         if (items.length === 0 && response.items) {
           items = response.items;
           products = response.products || [];
@@ -71,14 +73,12 @@ export function WishlistProvider({ children }) {
         }
         
         console.log('✅ Processed wishlist items:', items);
-        console.log('✅ Processed products:', products);
         
         setWishlist({ items, products, count });
         
         // Create set of product IDs for quick lookup
         const ids = new Set();
         items.forEach(item => {
-          // Handle different item structures
           let productId = null;
           if (item.productId) {
             productId = item.productId._id || item.productId.id || item.productId;
@@ -91,13 +91,15 @@ export function WishlistProvider({ children }) {
             ids.add(productId.toString());
           }
         });
-        console.log('✅ Wishlist IDs:', ids);
         setWishlistIds(ids);
       } else {
         console.warn('⚠️ Failed to fetch wishlist:', response.message);
       }
     } catch (error) {
-      console.error('❌ Failed to fetch wishlist:', error);
+      // Silent fail for 401
+      if (error.response?.status !== 401) {
+        console.error('❌ Failed to fetch wishlist:', error);
+      }
     } finally {
       setLoading(false);
     }
@@ -120,8 +122,6 @@ export function WishlistProvider({ children }) {
         const isInWishlist = response.data.isInWishlist;
         const productIdStr = productId.toString();
         
-        console.log(`✅ Product ${productIdStr} is now ${isInWishlist ? 'in' : 'removed from'} wishlist`);
-        
         // Update wishlist IDs
         setWishlistIds(prev => {
           const newSet = new Set(prev);
@@ -130,17 +130,14 @@ export function WishlistProvider({ children }) {
           } else {
             newSet.delete(productIdStr);
           }
-          console.log('🆕 Updated wishlist IDs:', newSet);
           return newSet;
         });
 
         // Update wishlist items
         setWishlist(prev => {
           if (isInWishlist) {
-            // Get product from response or create basic entry
             let newItem = null;
             if (response.data.wishlist) {
-              // Try to find the item in the response
               const foundItem = response.data.wishlist.items?.find(
                 item => {
                   const id = item.productId?._id || item.productId?.id || item.productId;
@@ -152,7 +149,6 @@ export function WishlistProvider({ children }) {
               }
             }
             
-            // If we couldn't find the item, create a basic one
             if (!newItem) {
               newItem = { 
                 productId: productId,
@@ -166,7 +162,6 @@ export function WishlistProvider({ children }) {
               count: prev.count + 1,
             };
           } else {
-            // Remove from wishlist
             const updatedItems = prev.items.filter(item => {
               const id = item.productId?._id || item.productId?.id || item.productId;
               return id?.toString() !== productIdStr;

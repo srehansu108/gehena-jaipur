@@ -17,13 +17,27 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// ============ REQUEST INTERCEPTOR ============
+// ============ REQUEST INTERCEPTOR - FIXED ============
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('authToken');
+    // ✅ Check for admin token first, then fallback to authToken
+    const adminToken = localStorage.getItem('adminToken');
+    const authToken = localStorage.getItem('authToken');
+    
+    // Use admin token if available, otherwise use auth token
+    const token = adminToken || authToken;
+    
+    // ✅ Debug logging
+    console.log('🔑 Token being sent:', token ? 'Yes (exists)' : 'No token found');
+    console.log('📡 Request URL:', config.url);
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('✅ Authorization header set');
+    } else {
+      console.warn('⚠️ No token found in localStorage');
     }
+    
     return config;
   },
   (error) => {
@@ -32,7 +46,7 @@ api.interceptors.request.use(
   }
 );
 
-// ============ RESPONSE INTERCEPTOR ============
+// ============ RESPONSE INTERCEPTOR - FIXED ============
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -41,22 +55,84 @@ api.interceptors.response.use(
       
       console.error(`API Error [${status}]:`, data?.message || error.message);
       
-      if (status === 401) {
-        localStorage.removeItem('authToken');
-        // window.location.href = '/login';
+      // Handle different status codes
+      switch (status) {
+        case 400:
+          console.warn('Bad Request:', data?.errors || data?.message);
+          error.displayMessage = data?.message || 'Invalid request. Please check your input.';
+          break;
+          
+        case 401:
+          console.warn('🔒 Session expired or unauthorized');
+          
+          // ✅ Check if we're on admin or auth pages
+          const isAdminPage = window.location.pathname.startsWith('/admin');
+          const isLoginPage = window.location.pathname.includes('/login') || 
+                             window.location.pathname.includes('/signup');
+          
+          // ✅ For admin pages, just log but don't redirect automatically
+          if (isAdminPage) {
+            console.warn('Admin token may be invalid. Please re-login.');
+            // You can show a toast/notification here
+          } else if (!isLoginPage) {
+            // Only redirect for non-admin pages
+            localStorage.removeItem('authToken');
+            if (!window.location.pathname.includes('/login')) {
+              window.location.href = '/login';
+            }
+          }
+          
+          error.displayMessage = 'Please login to continue.';
+          break;
+          
+        case 403:
+          console.error('Access Denied: Insufficient permissions');
+          error.displayMessage = data?.message || 'You don\'t have permission to perform this action.';
+          break;
+          
+        case 404:
+          // Don't log 404 for admin endpoints (they might not exist yet)
+          if (!error.config?.url?.includes('/admin')) {
+            console.warn('Resource not found:', error.config?.url);
+          }
+          error.displayMessage = data?.message || 'Resource not found.';
+          break;
+          
+        case 409:
+          console.warn('Conflict:', data?.message);
+          error.displayMessage = data?.message || 'Conflict detected. Duplicate entry.';
+          break;
+          
+        case 422:
+          console.warn('Validation Error:', data?.errors || data?.message);
+          error.displayMessage = data?.message || 'Validation failed. Please check your input.';
+          break;
+          
+        case 429:
+          console.warn('Rate limit exceeded. Please try again later.');
+          error.displayMessage = 'Too many requests. Please try again later.';
+          break;
+          
+        case 500:
+        case 502:
+        case 503:
+        case 504:
+          console.error('Server Error:', data?.message || 'Internal server error');
+          error.displayMessage = 'Server error. Please try again later.';
+          break;
+          
+        default:
+          console.warn(`Unhandled status code: ${status}`);
+          error.displayMessage = data?.message || 'An unexpected error occurred.';
       }
       
-      if (status === 404) {
-        console.warn('Resource not found:', error.config?.url);
-      }
-      
-      if (status >= 500) {
-        console.error('Server error. Please try again later.');
-      }
     } else if (error.request) {
       console.error('Network Error: Could not reach server');
+      error.displayMessage = 'Network error. Please check your internet connection.';
+      
     } else {
       console.error('Error:', error.message);
+      error.displayMessage = error.message || 'An error occurred while making the request.';
     }
     
     return Promise.reject(error);
@@ -66,14 +142,151 @@ api.interceptors.response.use(
 // ============ AUTH ENDPOINTS ============
 
 /**
+ * Admin Login - DEMO MODE (bypasses backend)
+ * @param {Object} credentials - Login credentials
+ * @param {string} credentials.email - Admin email
+ * @param {string} credentials.password - Admin password
+ * @param {boolean} credentials.rememberMe - Remember me flag
+ * @returns {Promise} Auth response with token and user data
+ */
+export const adminLogin = async (credentials) => {
+  // Demo credentials
+  const DEMO_CREDENTIALS = {
+    email: 'admin@adminportal.com',
+    password: 'Admin@123',
+  };
+
+  console.log('🔐 Admin login - DEMO MODE');
+  
+  // Check if credentials match demo credentials
+  if (credentials.email === DEMO_CREDENTIALS.email && 
+      credentials.password === DEMO_CREDENTIALS.password) {
+    
+    // Generate a demo token
+    const token = 'demo-jwt-token-' + Date.now();
+    const userData = {
+      id: '1',
+      name: 'Super Admin',
+      email: credentials.email,
+      role: 'admin',  // ✅ CHANGED from 'super_admin' to 'admin' to match middleware
+      permissions: ['all'],
+      isAdmin: true
+    };
+
+    // Store in localStorage
+    localStorage.setItem('adminToken', token);
+    localStorage.setItem('adminUser', JSON.stringify(userData));
+    if (credentials.rememberMe) {
+      localStorage.setItem('rememberMe', 'true');
+    }
+
+    console.log('✅ Admin login successful! Token saved:', token.substring(0, 20) + '...');
+    console.log('📦 User data saved:', userData);
+
+    return {
+      success: true,
+      token: token,
+      user: userData,
+      message: 'Login successful (demo mode)'
+    };
+  }
+
+  // If credentials don't match, return error
+  return {
+    success: false,
+    message: 'Invalid email or password'
+  };
+};
+
+/**
+ * Admin Logout
+ * @returns {Promise} Logout response
+ */
+export const adminLogout = async () => {
+  try {
+    const response = await api.post('/admin/logout');
+    return response.data;
+  } catch (error) {
+    console.error('Admin logout error:', error);
+    throw error;
+  } finally {
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUser');
+    localStorage.removeItem('rememberMe');
+  }
+};
+
+/**
+ * Get admin profile
+ * @returns {Promise} Admin user data
+ */
+export const getAdminProfile = async () => {
+  try {
+    const response = await api.get('/admin/profile');
+    return response.data;
+  } catch (error) {
+    console.error('Get admin profile error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update admin profile
+ * @param {Object} userData - Updated admin data
+ * @returns {Promise} Updated admin data
+ */
+export const updateAdminProfile = async (userData) => {
+  try {
+    const response = await api.put('/admin/profile', userData);
+    return response.data;
+  } catch (error) {
+    console.error('Update admin profile error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Check if admin is authenticated
+ * @returns {boolean} True if authenticated
+ */
+export const isAdminAuthenticated = () => {
+  return !!localStorage.getItem('adminToken');
+};
+
+/**
+ * Get admin user from storage
+ * @returns {Object|null} Admin user data or null
+ */
+export const getAdminUser = () => {
+  try {
+    const user = localStorage.getItem('adminUser');
+    return user ? JSON.parse(user) : null;
+  } catch (error) {
+    console.error('Error parsing admin user:', error);
+    return null;
+  }
+};
+
+/**
+ * Get admin from token (decoded)
+ * @returns {Object|null} Admin data or null
+ */
+export const getAdminFromToken = () => {
+  try {
+    const token = localStorage.getItem('adminToken');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload;
+  } catch (error) {
+    return null;
+  }
+};
+
+// ============ USER AUTH ENDPOINTS (for regular users) ============
+
+/**
  * User signup/registration
  * @param {Object} userData - User registration data
- * @param {string} userData.username - Username
- * @param {string} userData.firstName - First name
- * @param {string} userData.lastName - Last name
- * @param {string} userData.mobileNumber - Mobile number
- * @param {string} userData.email - Email address
- * @param {string} userData.password - Password
  * @returns {Promise} Auth response with token and user data
  */
 export const signup = async (userData) => {
@@ -422,8 +635,6 @@ export const checkWishlist = async (productId) => {
     throw error;
   }
 };
-// src/services/api.js
-// Add these new endpoints to your existing api.js
 
 // ============ ACCOUNT ENDPOINTS ============
 
@@ -614,6 +825,336 @@ export const getCartCount = async () => {
     return response.data;
   } catch (error) {
     console.error('Error getting cart count:', error);
+    throw error;
+  }
+};
+
+// ============ ADMIN ENDPOINTS ============
+
+/**
+ * Get admin dashboard statistics
+ * @returns {Promise} Dashboard stats with real data
+ */
+export const getAdminStats = async () => {
+  try {
+    console.log('📊 Fetching admin stats...');
+    const response = await api.get('/admin/stats');
+    console.log('✅ Admin stats received:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error fetching admin stats:', error);
+    
+    // Return fallback data only if API fails
+    return {
+      success: true,
+      data: {
+        totalUsers: 0,
+        totalRevenue: 0,
+        totalOrders: 0,
+        growth: 0,
+        newUsersToday: 0,
+        newUsersThisWeek: 0,
+        newUsersThisMonth: 0,
+        pendingOrders: 0,
+        processingOrders: 0,
+        shippedOrders: 0,
+        deliveredOrders: 0,
+        cancelledOrders: 0,
+        revenueToday: 0,
+        revenueThisWeek: 0,
+        revenueThisMonth: 0,
+        averageOrderValue: 0,
+        totalProducts: 0,
+        lowStockProducts: 0,
+        outOfStockProducts: 0,
+        recentActivities: [],
+        monthlyRevenue: []
+      }
+    };
+  }
+};
+
+// ============ ADMIN USER ENDPOINTS ============
+
+/**
+ * Get all users with pagination and search
+ * @param {Object} params - Query parameters
+ * @returns {Promise} Users data from database
+ */
+export const getAdminUsers = async (params = {}) => {
+  try {
+    console.log('📊 Fetching admin users...', params);
+    const response = await api.get('/admin/users', { params });
+    console.log('✅ Admin users response:', response.data);
+    
+    // ✅ Handle different response structures
+    if (response.data && response.data.success) {
+      return {
+        success: true,
+        data: response.data.data || [],
+        pagination: response.data.pagination || {
+          page: 1,
+          limit: 10,
+          total: response.data.data?.length || 0,
+          pages: 1
+        }
+      };
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error fetching admin users:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update user role
+ * @param {string} userId - User ID
+ * @param {string} role - New role ('user' or 'admin')
+ * @returns {Promise} Updated user data
+ */
+export const updateUserRole = async (userId, role) => {
+  try {
+    const response = await api.put(`/admin/users/${userId}/role`, { role });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete user
+ * @param {string} userId - User ID
+ * @returns {Promise} Delete response
+ */
+export const deleteUser = async (userId) => {
+  try {
+    const response = await api.delete(`/admin/users/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    throw error;
+  }
+};
+
+// ============ ADMIN PRODUCT ENDPOINTS ============
+
+/**
+ * Get admin products with pagination and search
+ * @param {Object} params - Query parameters
+ * @returns {Promise} Products data from database
+ */
+export const getAdminProducts = async (params = {}) => {
+  try {
+    console.log('📊 Fetching admin products...', params);
+    const response = await api.get('/products/admin/products', { params }); // ✅ CORRECT
+    console.log('✅ Admin products received:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error fetching admin products:', error);
+    throw error;
+  }
+};
+/**
+ * Create a new product (Admin)
+ * @param {Object} productData - Product data
+ * @returns {Promise} Created product
+ */
+export const createProduct = async (productData) => {
+  try {
+    console.log('📦 Creating product...', productData);
+    const response = await api.post('/products/admin/products', productData);
+    console.log('✅ Product created:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error creating product:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update a product (Admin)
+ * @param {string} productId - Product ID
+ * @param {Object} productData - Updated product data
+ * @returns {Promise} Updated product
+ */
+export const updateProduct = async (productId, productData) => {
+  try {
+    console.log('📝 Updating product...', productId, productData);
+    const response = await api.put(`/products/admin/products/${productId}`, productData);
+    console.log('✅ Product updated:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error updating product:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a product (Admin)
+ * @param {string} productId - Product ID
+ * @returns {Promise} Delete response
+ */
+export const deleteProduct = async (productId) => {
+  try {
+    console.log('🗑️ Deleting product...', productId);
+    const response = await api.delete(`/products/admin/products/${productId}`);
+    console.log('✅ Product deleted:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error deleting product:', error);
+    throw error;
+  }
+};
+
+
+// ============ BULK IMPORT/EXPORT ENDPOINTS ============
+
+/**
+ * Bulk import products from CSV/JSON
+ * @param {Array} products - Array of product data
+ * @returns {Promise} Import response
+ */
+export const bulkImportProducts = async (products) => {
+  try {
+    console.log('📦 Bulk importing products...', products.length);
+    const response = await api.post('/products/admin/products/bulk', { products });
+    console.log('✅ Bulk import completed:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error bulk importing products:', error);
+    throw error;
+  }
+};
+
+/**
+ * Export products as CSV
+ * @param {Object} params - Query parameters for filtering
+ * @returns {Promise} CSV data
+ */
+export const exportProductsCSV = async (params = {}) => {
+  try {
+    console.log('📤 Exporting products as CSV...', params);
+    const response = await api.get('/products/admin/export/csv', { 
+      params,
+      responseType: 'blob' 
+    });
+    console.log('✅ CSV export completed');
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error exporting products as CSV:', error);
+    throw error;
+  }
+};
+
+/**
+ * Export products as JSON
+ * @param {Object} params - Query parameters for filtering
+ * @returns {Promise} JSON data
+ */
+export const exportProductsJSON = async (params = {}) => {
+  try {
+    console.log('📤 Exporting products as JSON...', params);
+    const response = await api.get('/products/admin/export/json', { params });
+    console.log('✅ JSON export completed');
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error exporting products as JSON:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get sample CSV template
+ * @returns {Promise} CSV template blob
+ */
+export const getCSVTemplate = async () => {
+  try {
+    console.log('📄 Getting CSV template...');
+    const response = await api.get('/products/admin/export/template', {
+      responseType: 'blob'
+    });
+    console.log('✅ CSV template received');
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error getting CSV template:', error);
+    throw error;
+  }
+};
+
+// ============ ANALYTICS ENDPOINTS ============
+
+/**
+ * Get analytics data for dashboard
+ * @param {Object} params - Query parameters
+ * @param {string} params.range - Time range (7d, 30d, 90d, 12m)
+ * @returns {Promise} Analytics data
+ */
+export const getAnalyticsData = async (params = {}) => {
+  try {
+    console.log('📊 Fetching analytics data...', params);
+    const response = await api.get('/admin/analytics', { params });
+    console.log('✅ Analytics data received:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error fetching analytics:', error);
+    throw error;
+  }
+};
+
+// ============ REPORTS ENDPOINTS ============
+
+/**
+ * Get reports data
+ * @param {Object} params - Query parameters
+ * @returns {Promise} Reports data
+ */
+export const getReports = async (params = {}) => {
+  try {
+    console.log('📄 Fetching reports...', params);
+    const response = await api.get('/admin/reports', { params });
+    console.log('✅ Reports received:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error fetching reports:', error);
+    throw error;
+  }
+};
+
+/**
+ * Download report as PDF
+ * @param {Object} params - Report parameters
+ * @returns {Promise} PDF blob
+ */
+export const downloadReportPDF = async (params = {}) => {
+  try {
+    const response = await api.get('/admin/reports/download/pdf', {
+      params,
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error downloading PDF:', error);
+    throw error;
+  }
+};
+
+/**
+ * Download report as Excel
+ * @param {Object} params - Report parameters
+ * @returns {Promise} Excel blob
+ */
+export const downloadReportExcel = async (params = {}) => {
+  try {
+    const response = await api.get('/admin/reports/download/excel', {
+      params,
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error downloading Excel:', error);
     throw error;
   }
 };

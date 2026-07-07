@@ -15,6 +15,7 @@ const metaRoutes = require('./routes/metaRoutes'); // ✅ ADD THIS
 const errorHandler = require('./middleware/errorHandler');
 const cacheService = require('./services/cacheService');
 const wishlistRoutes = require('./routes/wishlistRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 
@@ -100,6 +101,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/meta', metaRoutes); 
 app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/admin', adminRoutes);
 
 // 404 handler
 app.use((req, res) => {
