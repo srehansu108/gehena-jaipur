@@ -22,6 +22,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import AccountPage from './pages/AccountPage';
 import { CartPage } from './pages/CartPage';
 import { WishlistPage } from './pages/WishlistPage';
+import Checkout from './pages/Checkout';
 
 // ✅ Admin Components
 import AdminLoginPage from './pages/AdminLoginPage';
@@ -32,6 +33,7 @@ import Layout from './components/layout/Layout';
 import AdminProducts from './pages/AdminProducts';
 import AdminAnalytics from './pages/AdminAnalytics';
 import AdminReports from './pages/AdminReports';
+import AdminOrderManagement from './pages/AdminOrderManagement';
 
 function AppContent() {
   const location = useLocation();
@@ -58,6 +60,7 @@ function AppContent() {
         <Route path="/exclusive-sales" element={<ExclusiveSalesPage />} />
         <Route path="/about" element={<AboutUs />} />
         <Route path="/contact" element={<ContactUs />} />
+        <Route path="/checkout" element={<Checkout />} />
         <Route path="/product-category/:category" element={<ProductPage />} />
         <Route path="/product-category/:category/:subcategorySlug" element={<ProductPage />} />
         
@@ -111,6 +114,13 @@ function AppContent() {
           <ProtectedRoute requireAdmin>
             <Layout>
               <AdminProducts />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/order-management" element={
+          <ProtectedRoute requireAdmin>
+            <Layout>
+              <AdminOrderManagement />
             </Layout>
           </ProtectedRoute>
         } />

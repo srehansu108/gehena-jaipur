@@ -16,6 +16,7 @@ const navigation = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: HomeIcon },
   { name: 'Users', href: '/admin/users', icon: UsersIcon },
   { name: 'Products', href: '/admin/products', icon: ShoppingBagIcon },
+  { name: 'Order Management', href: '/admin/order-management', icon: ShoppingBagIcon },
   { name: 'Analytics', href: '/admin/analytics', icon: ChartBarIcon },
   { name: 'Reports', href: '/admin/reports', icon: DocumentTextIcon },
   { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon },

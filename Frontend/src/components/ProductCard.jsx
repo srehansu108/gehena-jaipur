@@ -1,4 +1,4 @@
-// src/components/ProductCard.jsx - FIXED VERSION
+// src/components/ProductCard.jsx - FIXED VERSION ✅
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -8,9 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 export function ProductCard({ 
   product, 
-  onQuickView, 
-  onToggleWishlist: propOnToggleWishlist, 
-  isWishlisted: propIsWishlisted,
+  onQuickView,
   viewMode = 'grid',
   onAddToCart,
   isAddingToCart = false
@@ -28,18 +26,13 @@ export function ProductCard({
   const productId = product._id || product.id;
   const productIdStr = productId?.toString();
 
-  // ✅ Determine if product is in wishlist - PRIORITIZE CONTEXT
+  // ✅ Determine if product is in wishlist - USE CONTEXT
   const isWishlisted = contextIsInWishlist(productIdStr);
   
   // ✅ Sync local state with context
   useEffect(() => {
     setLocalWishlistState(isWishlisted);
   }, [isWishlisted]);
-
-  // ✅ Debug logging
-  useEffect(() => {
-    console.log(`🔄 ProductCard: ${product?.name} - ID: ${productIdStr} - In Wishlist: ${isWishlisted}`);
-  }, [productIdStr, isWishlisted]);
 
   const handleCardClick = (e) => {
     if (e.target.closest('button')) return;
@@ -62,11 +55,11 @@ export function ProductCard({
   };
 
   const getImageUrl = () => {
-    if (imageError) return 'https://via.placeholder.com/400x400?text=No+Image';
+    if (imageError) return 'https://placehold.co/400x400/pink/white?text=Jewel';
     if (product.images && product.images.length > 0) {
       return product.images[0];
     }
-    return 'https://via.placeholder.com/400x400?text=No+Image';
+    return 'https://placehold.co/400x400/pink/white?text=Jewel';
   };
 
   const formatPrice = (price) => {
@@ -80,13 +73,12 @@ export function ProductCard({
     }
   };
 
-  // ✅ Handle wishlist toggle - USE CONTEXT ALWAYS
+  // ✅ Handle wishlist toggle - USE CONTEXT
   const handleWishlistToggle = async (e) => {
     e.stopPropagation();
     
     console.log('❤️ Wishlist button clicked for product:', productIdStr, product?.name);
     
-    // ✅ ALWAYS use context, ignore prop
     if (!isAuthenticated) {
       console.warn('⚠️ User not authenticated, redirecting to login');
       navigate('/login');
@@ -165,7 +157,7 @@ export function ProductCard({
             </button>
           )}
           
-          {/* ✅ Wishlist Button - uses local state for UI */}
+          {/* ✅ Wishlist Button */}
           <button 
             onClick={handleWishlistToggle}
             className="bg-white p-3 rounded-full hover:bg-gradient-to-r hover:from-pink-500 hover:to-rose-500 hover:text-white transition-all transform hover:scale-110 shadow-md hover:shadow-pink-lg"

@@ -1063,20 +1063,19 @@ export function ProductPage() {
 
             {/* Products Grid - Updated with cart props */}
             {filteredProducts.length > 0 ? (
-              <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'} gap-6`}>
-                {filteredProducts.map(product => (
-                  <ProductCard
-                    key={product._id || product.id}
-                    product={product}
-                    onQuickView={setQuickViewProduct}
-                    onToggleWishlist={toggleWishlist}
-                    isWishlisted={wishlist.includes(product._id || product.id)}
-                    viewMode={viewMode}
-                    onAddToCart={handleAddToCart} // ✅ Pass the handler
-                    isAddingToCart={addingToCart[product._id || product.id] || false} // ✅ Pass loading state
-                  />
-                ))}
-              </div>
+  <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'} gap-6`}>
+    {filteredProducts.map(product => (
+      <ProductCard
+        key={product._id || product.id}
+        product={product}
+        onQuickView={setQuickViewProduct}
+        onAddToCart={handleAddToCart}
+        isAddingToCart={addingToCart[product._id || product.id] || false}
+        // ✅ Don't pass wishlist props - let ProductCard use its own context
+      />
+    ))}
+  </div>
+
             ) : (
               <div className="text-center py-16 bg-white rounded-xl">
                 <div className="text-6xl mb-4">🔍</div>

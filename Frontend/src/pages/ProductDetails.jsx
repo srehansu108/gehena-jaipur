@@ -559,39 +559,44 @@ export function ProductDetails() {
   };
 
   // ✅ FIXED: Buy Now
-  const handleBuyNow = async () => {
-    if (!product) return;
+  const handleBuyNow = () => {
+  if (!product) return;
 
-    if (!isAuthenticated) {
-      alert('Please login to proceed');
-      navigate('/login');
-      return;
-    }
+  if (!isAuthenticated) {
+    alert('Please login to proceed');
+    navigate('/login');
+    return;
+  }
 
-    // ✅ FIX: Use inStock and stockCount
-    if (!isProductInStock()) {
-      alert('Sorry, this product is out of stock');
-      return;
-    }
+  if (!isProductInStock()) {
+    alert('Sorry, this product is out of stock');
+    return;
+  }
 
-    const productId = product._id || product.id;
-    setIsAddingToCart(true);
-    
-    try {
-      const result = await addItem(productId, quantity);
-      
-      if (result.success) {
-        navigate('/checkout');
-      } else {
-        alert(result.message || 'Failed to add item to cart');
-      }
-    } catch (error) {
-      console.error('Error adding to cart:', error);
-      alert('An unexpected error occurred. Please try again.');
-    } finally {
-      setIsAddingToCart(false);
-    }
+  if (product.category === 'rings' && !selectedSize) {
+    alert('Please select a size');
+    return;
+  }
+
+  // ✅ Create product data for direct purchase
+  const productToBuy = {
+    productId: product._id || product.id,
+    name: product.name,
+    price: product.price,
+    quantity: quantity,
+    image: product.images?.[0] || null,
+    metal: product.metal || '',
+    category: product.category || '',
+    sku: product.sku || '',
   };
+
+  // ✅ Navigate directly to checkout with product data
+  navigate('/checkout', { 
+    state: { 
+      directPurchase: productToBuy
+    }
+  });
+};
 
   const handleWishlist = () => {
     alert('Added to wishlist!');

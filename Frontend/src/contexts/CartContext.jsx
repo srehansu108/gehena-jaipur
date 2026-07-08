@@ -1,4 +1,4 @@
-// src/contexts/CartContext.jsx
+// src/contexts/CartContext.jsx - FIXED ✅
 
 import { createContext, useContext, useState, useEffect } from 'react';
 import * as api from '../services/api';
@@ -15,7 +15,7 @@ export function CartProvider({ children }) {
   // Check if we're on an admin page
   const isAdminPage = window.location.pathname.startsWith('/admin');
   // Check if user is admin
-  const isAdmin = user?.isAdmin || user?.role === 'super_admin';
+  const isAdmin = user?.isAdmin || user?.role === 'super_admin' || user?.role === 'admin';
 
   // Fetch cart only when authenticated and NOT on admin pages
   useEffect(() => {
@@ -61,6 +61,27 @@ export function CartProvider({ children }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ✅ NEW: Get cart items as array
+  const getCartItems = () => {
+    return cart?.items || [];
+  };
+
+  // ✅ NEW: Get cart total
+  const getCartTotal = () => {
+    if (!cart?.items || cart.items.length === 0) return 0;
+    return cart.items.reduce((total, item) => {
+      const price = item.product?.price || item.price || 0;
+      const quantity = item.quantity || 1;
+      return total + (price * quantity);
+    }, 0);
+  };
+
+  // ✅ NEW: Get cart total items count
+  const getTotalItems = () => {
+    if (!cart?.items) return 0;
+    return cart.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
   };
 
   const addItem = async (productId, quantity = 1) => {
@@ -169,6 +190,11 @@ export function CartProvider({ children }) {
     cart,
     loading,
     itemCount,
+    // ✅ NEW: Add these for compatibility
+    items: cart?.items || [], // Alias for getCartItems
+    getCartItems,
+    getCartTotal,    // ✅ ADD THIS
+    getTotalItems,   // ✅ ADD THIS
     fetchCart,
     addItem,
     updateItem,
