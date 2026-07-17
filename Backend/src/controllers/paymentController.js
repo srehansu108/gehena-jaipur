@@ -1,5 +1,5 @@
 // backend/controllers/paymentController.js
-// PhonePe Integration with Client ID and API Key
+// FIXED: Sandbox/Test Mode Support
 
 const Order = require('../models/Order');
 const crypto = require('crypto');
@@ -7,7 +7,7 @@ const axios = require('axios');
 
 class PaymentController {
   // ============================================
-  // PHONEPE INIT - PRODUCTION
+  // PHONEPE INIT
   // ============================================
   initPhonePePayment = async (req, res) => {
     try {
@@ -81,9 +81,9 @@ class PaymentController {
       // ============================================
       // PHONEPE API PAYLOAD
       // ============================================
-      // Using Client ID and API Key (API Key is the Salt Key)
+      // Using Client ID as Merchant ID
       const payload = {
-        merchantId: clientId, // Client ID acts as Merchant ID
+        merchantId: clientId,
         merchantTransactionId: transactionId,
         merchantUserId: order.userId.toString(),
         amount: Math.round(order.total * 100), // Amount in paise
@@ -102,7 +102,6 @@ class PaymentController {
       // ============================================
       // GENERATE CHECKSUM
       // ============================================
-      // API Key is used as the Salt Key for checksum generation
       const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64');
       
       // For PhonePe, the string to hash is: base64Payload + "/pg/v1/pay" + apiKey
@@ -116,37 +115,75 @@ class PaymentController {
       const xVerify = checksum + '###' + clientVersion;
 
       console.log('🔑 X-VERIFY:', xVerify);
-      console.log('🔑 Client ID:', clientId);
-      console.log('🔑 Client Version:', clientVersion);
 
       // ============================================
-      // CALL PHONEPE API
+      // TRY MULTIPLE PHONEPE API ENDPOINTS
       // ============================================
-      // PhonePe API URL with Client ID authentication
-      const apiUrl = process.env.PHONEPE_BASE_URL || 'https://api.phonepe.com/apis/hermes/pg/v1';
+      // Try both sandbox and production URLs
+      const apiEndpoints = [
+        'https://api.phonepe.com/apis/hermes/sandbox/pg/v1/pay',
+        'https://api.phonepe.com/apis/hermes/pg/v1/pay',
+        'https://api.phonepe.com/apis/merchant/v1/pay'
+      ];
 
-      console.log(`📤 Calling PhonePe API: ${apiUrl}/pay`);
+      let response = null;
+      let usedEndpoint = '';
 
-      const response = await axios.post(
-        `${apiUrl}/pay`,
-        { request: base64Payload },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-VERIFY': xVerify,
-            'X-CLIENT-ID': clientId,
-            'X-CLIENT-VERSION': clientVersion
-          },
-          timeout: 30000
+      for (const endpoint of apiEndpoints) {
+        try {
+          console.log(`📤 Trying PhonePe API: ${endpoint}`);
+          
+          response = await axios.post(
+            endpoint,
+            { request: base64Payload },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'X-VERIFY': xVerify,
+                'X-CLIENT-ID': clientId,
+                'X-CLIENT-VERSION': clientVersion
+              },
+              timeout: 30000
+            }
+          );
+          
+          if (response.data && response.data.success) {
+            usedEndpoint = endpoint;
+            console.log(`✅ Success with endpoint: ${endpoint}`);
+            break;
+          }
+        } catch (error) {
+          console.log(`❌ Failed with endpoint: ${endpoint}`);
+          console.log(`   Status: ${error.response?.status}`);
+          console.log(`   Data: ${JSON.stringify(error.response?.data)}`);
+          
+          // If we get a response with data, store it
+          if (error.response) {
+            response = error.response;
+            usedEndpoint = endpoint;
+            
+            // If it's not a 404, break (this might be the right endpoint)
+            if (error.response?.status !== 404) {
+              break;
+            }
+          }
         }
-      );
+      }
+
+      if (!response) {
+        throw new Error('All PhonePe API endpoints failed - No response received');
+      }
 
       console.log('📦 PhonePe API Response:', JSON.stringify(response.data, null, 2));
 
       // ============================================
       // PROCESS RESPONSE
       // ============================================
-      if (!response.data || !response.data.success) {
+      if (!response.data) {
+        throw new Error('No response data from PhonePe');
+      }
+
+      if (!response.data.success) {
         console.error('❌ PhonePe API error:', response.data);
         const errorMsg = response.data?.message || response.data?.code || 'PhonePe payment initialization failed';
         throw new Error(errorMsg);
@@ -157,13 +194,15 @@ class PaymentController {
 
       if (!paymentUrl) {
         console.error('❌ No payment URL in response');
+        console.error('Full response:', JSON.stringify(response.data, null, 2));
         throw new Error('No payment URL received from PhonePe');
       }
 
       // Update order with payment URL
       order.paymentMetadata = {
         ...order.paymentMetadata,
-        phonepePaymentUrl: paymentUrl
+        phonepePaymentUrl: paymentUrl,
+        phonepeEndpoint: usedEndpoint
       };
       await order.save();
 
@@ -184,15 +223,30 @@ class PaymentController {
       console.error('❌ PhonePe init error:', error.message);
       console.error('Error stack:', error.stack);
 
+      // If error response from PhonePe
       if (error.response) {
         console.error('PhonePe Error Response:', error.response.data);
         console.error('PhonePe Error Status:', error.response.status);
         console.error('PhonePe Error Headers:', error.response.headers);
       }
 
+      // Return a more detailed error message
+      let errorMessage = 'Failed to initialize PhonePe payment';
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+
       return res.status(500).json({
         success: false,
-        message: error.message || 'Failed to initialize PhonePe payment'
+        message: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? {
+          error: error.message,
+          stack: error.stack,
+          response: error.response?.data
+        } : undefined
       });
     }
   };
