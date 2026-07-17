@@ -1,6 +1,6 @@
-// src/pages/AccountPage.jsx - COMPLETE WITH CHECKOUTSERVICE ✅
+// src/pages/AccountPage.jsx - COMPLETE WITH NAVIGATION STATE HANDLING ✅
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   User, ShoppingBag, Heart, Star, Settings, 
   LogOut, Package, Calendar, ShoppingCart,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import checkoutService from '../services/checkoutService';
+import { toast } from 'react-hot-toast';
 
 // Status Configuration
 const statusConfig = {
@@ -24,6 +25,7 @@ const statusConfig = {
 
 export function AccountPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout, isAuthenticated, token } = useAuth();
   
   const [activeTab, setActiveTab] = useState('overview');
@@ -48,6 +50,29 @@ export function AccountPage() {
     }
   }, [isAuthenticated, navigate]);
 
+  // Handle navigation state from OrderSuccessModal
+  useEffect(() => {
+    // Check if we have navigation state from OrderSuccessModal
+    const state = location.state;
+    if (state) {
+      // Set active tab to orders if specified
+      if (state.activeTab) {
+        setActiveTab(state.activeTab);
+      }
+      
+      // If there's a selected order ID, fetch and show it
+      if (state.selectedOrderId) {
+        // Small delay to ensure orders are loaded first
+        setTimeout(() => {
+          viewOrderDetails(state.selectedOrderId);
+        }, 500);
+      }
+      
+      // Clear the location state to prevent re-triggering on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
+
   // Fetch account data
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -59,6 +84,7 @@ export function AccountPage() {
   // Fetch orders with pagination
   const fetchOrders = async (page = 1) => {
     try {
+      setLoading(true);
       checkoutService.setToken(token);
       const response = await checkoutService.getMyOrders(page);
       
@@ -68,12 +94,14 @@ export function AccountPage() {
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
+      toast.error('Failed to fetch orders');
+    } finally {
+      setLoading(false);
     }
   };
 
   const fetchAccountData = async () => {
     try {
-      setLoading(true);
       setError('');
       
       // Calculate account data from orders
@@ -95,24 +123,29 @@ export function AccountPage() {
     } catch (error) {
       console.error('Error fetching account data:', error);
       setError('Failed to load account data. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
   // View order details
   const viewOrderDetails = async (orderId) => {
+    if (!orderId) return;
+    
     try {
+      setLoading(true);
       checkoutService.setToken(token);
       const response = await checkoutService.getOrderById(orderId);
       
       if (response.success) {
         setSelectedOrder(response.data);
         setShowOrderDetails(true);
+      } else {
+        toast.error('Failed to fetch order details');
       }
     } catch (error) {
       console.error('Error fetching order details:', error);
-      alert('Failed to fetch order details');
+      toast.error('Failed to fetch order details');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -126,15 +159,18 @@ export function AccountPage() {
       const response = await checkoutService.cancelOrder(orderId, 'Cancelled by user');
       
       if (response.success) {
-        alert('Order cancelled successfully');
+        toast.success('Order cancelled successfully');
         await fetchOrders(pagination.currentPage);
-        if (showOrderDetails) setShowOrderDetails(false);
+        if (showOrderDetails) {
+          setShowOrderDetails(false);
+          setSelectedOrder(null);
+        }
       } else {
-        alert(response.message || 'Failed to cancel order');
+        toast.error(response.message || 'Failed to cancel order');
       }
     } catch (error) {
       console.error('Error cancelling order:', error);
-      alert('Failed to cancel order');
+      toast.error('Failed to cancel order');
     } finally {
       setCancelling(false);
     }
@@ -162,7 +198,7 @@ export function AccountPage() {
     { id: 'settings', label: 'Settings', icon: <Settings size={20} /> },
   ];
 
-  if (loading) {
+  if (loading && orders.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-pink-50/30 to-white flex items-center justify-center">
         <div className="text-center">
@@ -418,7 +454,7 @@ function OverviewTab({ user, accountData, orders, reviewStats, navigate }) {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
           <button 
-            onClick={() => window.location.href = '/orders'}
+            onClick={() => window.location.href = '/account'}
             className="text-pink-600 hover:text-pink-700 text-sm font-medium transition-colors flex items-center gap-1"
           >
             View All

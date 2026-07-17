@@ -1,4 +1,5 @@
 // backend/models/Order.js
+
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
@@ -68,6 +69,49 @@ const orderSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  
+  // ✅ Tax breakdown for detailed invoice
+  taxBreakdown: {
+    type: {
+      type: String,
+      enum: ['cgst_sgst', 'igst', 'none'],
+      default: 'none',
+    },
+    cgst: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    sgst: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    igst: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    total: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    rate: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    label: {
+      type: String,
+      default: '',
+    },
+    description: {
+      type: String,
+      default: '',
+    },
+  },
+  
   shippingCharges: {
     type: Number,
     default: 0,
@@ -77,19 +121,43 @@ const orderSchema = new mongoose.Schema({
     required: true,
   },
   
-  // Payment Details
+  // ✅ Payment Details - UPDATED with all payment gateways
   paymentMethod: {
     type: String,
-    enum: ['COD', 'Card', 'UPI', 'NetBanking', 'Wallet', 'Razorpay', 'Stripe'],
+    enum: ['COD', 'Card', 'UPI', 'NetBanking', 'Wallet', 'Razorpay', 'Stripe', 'PhonePe', 'QR'],
     required: true,
   },
   paymentStatus: {
     type: String,
-    enum: ['Pending', 'Paid', 'Failed', 'Refunded', 'COD'],
+    enum: ['Pending', 'Paid', 'Failed', 'Refunded', 'COD', 'Initiated'],
     default: 'Pending',
   },
   transactionId: String,
   paymentDate: Date,
+  
+  // ✅ NEW: Payment gateway specific fields
+  paymentGateway: {
+    type: String,
+    enum: ['razorpay', 'phonepe', 'stripe', 'cod', 'qr', null],
+    default: null,
+  },
+  gatewayOrderId: {
+    type: String,
+    index: true,
+  },
+  gatewayPaymentId: {
+    type: String,
+    index: true,
+  },
+  gatewaySignature: String,
+  paymentAttempts: {
+    type: Number,
+    default: 0,
+  },
+  paymentMetadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {},
+  },
   
   // Shipping Details
   shippingAddress: {
@@ -163,20 +231,30 @@ const orderSchema = new mongoose.Schema({
   toObject: { virtuals: true },
 });
 
-// ✅ Indexes for faster queries
+// ========== INDEXES ==========
 orderSchema.index({ userId: 1, createdAt: -1 });
 orderSchema.index({ orderNumber: 1 }, { unique: true });
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ 'items.productId': 1 });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ total: -1 });
+orderSchema.index({ gatewayOrderId: 1 });
+orderSchema.index({ gatewayPaymentId: 1 });
 
-// ✅ Virtual: Item count
+// ========== VIRTUALS ==========
 orderSchema.virtual('itemCount').get(function() {
   return this.items.reduce((sum, item) => sum + item.quantity, 0);
 });
 
-// ✅ Pre-save middleware
+orderSchema.virtual('isPaymentCompleted').get(function() {
+  return ['Paid', 'COD'].includes(this.paymentStatus);
+});
+
+orderSchema.virtual('isPaymentDue').get(function() {
+  return ['Pending', 'Initiated', 'Failed'].includes(this.paymentStatus);
+});
+
+// ========== PRE-SAVE MIDDLEWARE ==========
 orderSchema.pre('save', function(next) {
   this.updatedAt = new Date();
   
@@ -192,7 +270,22 @@ orderSchema.pre('save', function(next) {
   next();
 });
 
-// ✅ Static method: Get sales by date range
+// Generate order number
+orderSchema.pre('validate', function(next) {
+  if (!this.orderNumber) {
+    const date = new Date();
+    const year = date.getFullYear().toString().slice(-2);
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const random = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    this.orderNumber = `ORD-${year}${month}${day}-${random}`;
+  }
+  next();
+});
+
+// ========== STATIC METHODS ==========
+
+// Get sales by date range
 orderSchema.statics.getSalesByDateRange = async function(startDate, endDate) {
   return this.aggregate([
     {
@@ -213,7 +306,7 @@ orderSchema.statics.getSalesByDateRange = async function(startDate, endDate) {
   ]);
 };
 
-// ✅ Static method: Get category revenue
+// Get category revenue
 orderSchema.statics.getCategoryRevenue = async function() {
   return this.aggregate([
     { $unwind: '$items' },
@@ -228,7 +321,7 @@ orderSchema.statics.getCategoryRevenue = async function() {
   ]);
 };
 
-// ✅ Static method: Get top selling products
+// Get top selling products
 orderSchema.statics.getTopSellingProducts = async function(limit = 5) {
   return this.aggregate([
     { $unwind: '$items' },
@@ -247,7 +340,7 @@ orderSchema.statics.getTopSellingProducts = async function(limit = 5) {
   ]);
 };
 
-// ✅ Static method: Get order status distribution
+// Get order status distribution
 orderSchema.statics.getStatusDistribution = async function() {
   return this.aggregate([
     {
@@ -259,7 +352,7 @@ orderSchema.statics.getStatusDistribution = async function() {
   ]);
 };
 
-// ✅ Static method: Get monthly performance
+// Get monthly performance
 orderSchema.statics.getMonthlyPerformance = async function(months = 6) {
   const startDate = new Date();
   startDate.setMonth(startDate.getMonth() - months);
@@ -286,7 +379,7 @@ orderSchema.statics.getMonthlyPerformance = async function(months = 6) {
   ]);
 };
 
-// ✅ Static method: Get user growth
+// Get user growth
 orderSchema.statics.getUserGrowth = async function(startDate) {
   const User = mongoose.model('User');
   return User.aggregate([
@@ -305,7 +398,37 @@ orderSchema.statics.getUserGrowth = async function(startDate) {
   ]);
 };
 
-// ✅ Method: Cancel order
+// Get payment method distribution
+orderSchema.statics.getPaymentMethodDistribution = async function() {
+  return this.aggregate([
+    {
+      $group: {
+        _id: '$paymentMethod',
+        count: { $sum: 1 },
+        totalAmount: { $sum: '$total' }
+      }
+    },
+    { $sort: { count: -1 } }
+  ]);
+};
+
+// Get payment status distribution
+orderSchema.statics.getPaymentStatusDistribution = async function() {
+  return this.aggregate([
+    {
+      $group: {
+        _id: '$paymentStatus',
+        count: { $sum: 1 },
+        totalAmount: { $sum: '$total' }
+      }
+    },
+    { $sort: { count: -1 } }
+  ]);
+};
+
+// ========== INSTANCE METHODS ==========
+
+// Cancel order
 orderSchema.methods.cancel = async function(reason) {
   this.status = 'Cancelled';
   this.cancelledAt = new Date();
@@ -315,9 +438,10 @@ orderSchema.methods.cancel = async function(reason) {
     note: reason || 'Order cancelled',
   });
   await this.save();
+  return this;
 };
 
-// ✅ Method: Mark as delivered
+// Mark as delivered
 orderSchema.methods.markDelivered = async function() {
   this.status = 'Delivered';
   this.deliveredAt = new Date();
@@ -327,9 +451,10 @@ orderSchema.methods.markDelivered = async function() {
     note: 'Order delivered',
   });
   await this.save();
+  return this;
 };
 
-// ✅ Method: Add shipping tracking
+// Add shipping tracking
 orderSchema.methods.addTracking = async function(trackingNumber) {
   this.trackingNumber = trackingNumber;
   this.shippingStatus = 'Shipped';
@@ -340,20 +465,45 @@ orderSchema.methods.addTracking = async function(trackingNumber) {
     note: `Shipped with tracking: ${trackingNumber}`,
   });
   await this.save();
+  return this;
 };
 
-// Generate order number
-orderSchema.pre('validate', function(next) {
-  if (!this.orderNumber) {
-    const date = new Date();
-    const year = date.getFullYear().toString().slice(-2);
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const random = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
-    this.orderNumber = `ORD-${year}${month}${day}-${random}`;
-  }
-  next();
-});
+// Mark payment as paid
+orderSchema.methods.markPaymentPaid = async function(paymentData) {
+  this.paymentStatus = 'Paid';
+  this.paymentDate = new Date();
+  this.transactionId = paymentData.transactionId || this.transactionId;
+  this.gatewayPaymentId = paymentData.gatewayPaymentId || this.gatewayPaymentId;
+  this.gatewaySignature = paymentData.gatewaySignature || this.gatewaySignature;
+  this.paymentMetadata = {
+    ...this.paymentMetadata,
+    ...paymentData.metadata,
+    paidAt: new Date().toISOString()
+  };
+  this.status = 'Processing';
+  this.shippingStatus = 'Processing';
+  this.statusHistory.push({
+    status: 'Processing',
+    date: new Date(),
+    note: `Payment confirmed (${paymentData.gateway || 'Unknown'})`,
+    updatedBy: 'System'
+  });
+  await this.save();
+  return this;
+};
+
+// Mark payment as failed
+orderSchema.methods.markPaymentFailed = async function(reason) {
+  this.paymentStatus = 'Failed';
+  this.paymentAttempts += 1;
+  this.paymentMetadata = {
+    ...this.paymentMetadata,
+    failedReason: reason,
+    failedAt: new Date().toISOString()
+  };
+  await this.save();
+  return this;
+};
 
 const Order = mongoose.model('Order', orderSchema);
 module.exports = Order;

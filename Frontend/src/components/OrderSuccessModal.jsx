@@ -1,5 +1,6 @@
-// src/components/OrderSuccessModal.jsx
+// src/components/OrderSuccessModal.jsx - UPDATED WITH NAVIGATION FIXES ✅
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   CheckCircle, 
   ShoppingBag, 
@@ -19,6 +20,7 @@ import {
 import confetti from 'canvas-confetti';
 
 export default function OrderSuccessModal({ order, onClose, onViewOrder, onViewAllOrders }) {
+  const navigate = useNavigate();
   const [showConfetti, setShowConfetti] = useState(true);
 
   useEffect(() => {
@@ -102,13 +104,46 @@ export default function OrderSuccessModal({ order, onClose, onViewOrder, onViewA
     }
   };
 
+  // ✅ NEW: Handle View Order Details with navigation to AccountPage
+  const handleViewOrder = () => {
+    // Close the modal
+    if (onClose) onClose();
+    
+    // Navigate to account page with order ID in state
+    navigate('/account', { 
+      state: { 
+        selectedOrderId: order._id,
+        activeTab: 'orders'
+      } 
+    });
+  };
+
+  // ✅ NEW: Handle View All Orders with navigation to AccountPage
+  const handleViewAllOrders = () => {
+    // Close the modal
+    if (onClose) onClose();
+    
+    // Navigate to account page with orders tab active
+    navigate('/account', { 
+      state: { 
+        activeTab: 'orders'
+      } 
+    });
+  };
+
+  // ✅ NEW: Handle Close with navigation to products
+  const handleClose = () => {
+    if (onClose) onClose();
+    navigate('/products');
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto animate-fadeIn">
         {/* Header */}
         <div className="relative bg-gradient-to-r from-green-500 to-emerald-600 p-6 rounded-t-2xl">
           <button 
-            onClick={onClose}
+            onClick={handleClose}
             className="absolute right-4 top-4 text-white/80 hover:text-white transition-colors"
           >
             <X className="w-6 h-6" />
@@ -145,23 +180,27 @@ export default function OrderSuccessModal({ order, onClose, onViewOrder, onViewA
               Order Items
             </h3>
             <div className="space-y-3 max-h-48 overflow-y-auto">
-              {order.items.map((item, idx) => (
-                <div key={idx} className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
-                  <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
-                    {item.image ? (
-                      <img src={item.image} alt={item.productName} className="w-full h-full object-cover" />
-                    ) : (
-                      <ShoppingBag className="w-6 h-6 text-gray-400" />
-                    )}
+              {order.items && order.items.length > 0 ? (
+                order.items.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
+                    <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
+                      {item.image ? (
+                        <img src={item.image} alt={item.productName} className="w-full h-full object-cover" />
+                      ) : (
+                        <ShoppingBag className="w-6 h-6 text-gray-400" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{item.productName}</p>
+                      <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
+                      {item.metal && <p className="text-xs text-gray-400">{item.metal}</p>}
+                    </div>
+                    <p className="font-semibold text-pink-600">{formatCurrency(item.total)}</p>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{item.productName}</p>
-                    <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
-                    {item.metal && <p className="text-xs text-gray-400">{item.metal}</p>}
-                  </div>
-                  <p className="font-semibold text-pink-600">{formatCurrency(item.total)}</p>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-gray-500 text-center py-4">No items found</p>
+              )}
             </div>
           </div>
 
@@ -173,13 +212,13 @@ export default function OrderSuccessModal({ order, onClose, onViewOrder, onViewA
                 Shipping Address
               </h4>
               <p className="text-sm text-gray-600">
-                {order.shippingAddress?.fullName}<br />
-                {order.shippingAddress?.addressLine1}
+                {order.shippingAddress?.fullName || 'N/A'}<br />
+                {order.shippingAddress?.addressLine1 || 'N/A'}
                 {order.shippingAddress?.addressLine2 && <><br />{order.shippingAddress.addressLine2}</>}
                 <br />
-                {order.shippingAddress?.city}, {order.shippingAddress?.state} - {order.shippingAddress?.postalCode}
+                {order.shippingAddress?.city || 'N/A'}, {order.shippingAddress?.state || 'N/A'} - {order.shippingAddress?.postalCode || 'N/A'}
                 <br />
-                {order.shippingAddress?.country}
+                {order.shippingAddress?.country || 'N/A'}
               </p>
               {order.shippingAddress?.phoneNumber && (
                 <p className="text-sm text-gray-600 mt-1 flex items-center gap-1">
@@ -220,21 +259,21 @@ export default function OrderSuccessModal({ order, onClose, onViewOrder, onViewA
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">Payment: {order.paymentMethod}</p>
+              <p className="text-xs text-gray-500 mt-2">Payment: {order.paymentMethod || 'N/A'}</p>
             </div>
           </div>
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3">
             <button
-              onClick={onViewOrder}
+              onClick={handleViewOrder}
               className="flex-1 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors flex items-center justify-center gap-2"
             >
               <ExternalLink className="w-4 h-4" />
               View Order Details
             </button>
             <button
-              onClick={onViewAllOrders}
+              onClick={handleViewAllOrders}
               className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
             >
               <Home className="w-4 h-4" />

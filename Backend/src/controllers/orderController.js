@@ -1,4 +1,4 @@
-// backend/controllers/orderController.js - COMPLETE FIXED ✅
+// backend/controllers/orderController.js - COMPLETE WITH TAX BREAKDOWN ✅
 
 const Order = require('../models/Order');
 const Product = require('../models/Product');
@@ -25,7 +25,7 @@ async function generateOrderNumber() {
 
 class OrderController {
   /**
-   * Create a new order
+   * Create a new order - WITH TAX BREAKDOWN SUPPORT ✅
    */
   async createOrder(req, res) {
     try {
@@ -35,12 +35,20 @@ class OrderController {
         paymentMethod,
         paymentDetails,
         couponCode,
-        customerNote
+        customerNote,
+        subtotal,
+        discount,
+        tax,
+        shippingCharges,
+        total,
+        shippingMethod,
+        taxBreakdown, // ✅ NEW: Receive tax breakdown from frontend
       } = req.body;
 
       const userId = req.userId;
 
       console.log('📦 Creating order for user:', userId);
+      console.log('📊 Tax breakdown received:', taxBreakdown);
 
       if (!items || items.length === 0) {
         return res.status(400).json({
@@ -57,8 +65,9 @@ class OrderController {
         });
       }
 
+      // Process items
       const orderItems = [];
-      let subtotal = 0;
+      let calculatedSubtotal = 0;
 
       for (const item of items) {
         let product = null;
@@ -76,7 +85,7 @@ class OrderController {
         const productCategory = product?.category || item.category || '';
 
         const itemTotal = productPrice * item.quantity;
-        subtotal += itemTotal;
+        calculatedSubtotal += itemTotal;
 
         orderItems.push({
           productId: product?._id || item.productId || 'unknown',
@@ -89,6 +98,7 @@ class OrderController {
           metal: productMetal,
         });
 
+        // Update stock
         if (product) {
           product.stockCount = (product.stockCount || 0) - item.quantity;
           if (product.stockCount <= 0) {
@@ -98,11 +108,122 @@ class OrderController {
         }
       }
 
-      const discount = parseFloat(req.body.discount) || 0;
-      const tax = parseFloat(req.body.tax) || 0;
-      const shippingCharges = parseFloat(req.body.shippingCharges) || 0;
-      const total = subtotal - discount + tax + shippingCharges;
+      // ✅ Validate and structure tax breakdown
+      let validatedTaxBreakdown = { type: 'none', total: 0, rate: 0 };
+      
+      if (taxBreakdown) {
+        const validTypes = ['cgst_sgst', 'igst', 'none'];
+        if (validTypes.includes(taxBreakdown.type)) {
+          // For CGST/SGST
+          if (taxBreakdown.type === 'cgst_sgst') {
+            const cgst = taxBreakdown.cgst || 0;
+            const sgst = taxBreakdown.sgst || 0;
+            const totalTax = cgst + sgst;
+            
+            // Verify the tax amount matches
+            if (Math.abs(totalTax - (taxBreakdown.total || tax || 0)) > 1) {
+              console.warn('⚠️ Tax breakdown mismatch:', {
+                cgst,
+                sgst,
+                totalTax,
+                providedTotal: taxBreakdown.total || tax
+              });
+            }
+            
+            validatedTaxBreakdown = {
+              type: 'cgst_sgst',
+              cgst: cgst,
+              sgst: sgst,
+              igst: 0,
+              total: totalTax,
+              rate: taxBreakdown.rate || 0.03,
+              label: taxBreakdown.label || `CGST (1.5%) + SGST (1.5%)`,
+              description: taxBreakdown.description || 'Intra-state transaction'
+            };
+          } 
+          // For IGST
+          else if (taxBreakdown.type === 'igst') {
+            const igst = taxBreakdown.igst || 0;
+            
+            // Verify the tax amount matches
+            if (Math.abs(igst - (taxBreakdown.total || tax || 0)) > 1) {
+              console.warn('⚠️ Tax breakdown mismatch:', {
+                igst,
+                providedTotal: taxBreakdown.total || tax
+              });
+            }
+            
+            validatedTaxBreakdown = {
+              type: 'igst',
+              cgst: 0,
+              sgst: 0,
+              igst: igst,
+              total: igst,
+              rate: taxBreakdown.rate || 0.03,
+              label: taxBreakdown.label || `IGST (3.0%)`,
+              description: taxBreakdown.description || 'Inter-state transaction'
+            };
+          } 
+          // No tax
+          else if (taxBreakdown.type === 'none') {
+            validatedTaxBreakdown = {
+              type: 'none',
+              cgst: 0,
+              sgst: 0,
+              igst: 0,
+              total: 0,
+              rate: 0,
+              label: 'No tax applicable',
+              description: taxBreakdown.description || 'International order'
+            };
+          }
+        } else {
+          console.warn('⚠️ Invalid tax breakdown type:', taxBreakdown.type);
+        }
+      } else {
+        // Fallback: If no tax breakdown provided, create from tax amount
+        const taxAmount = tax || 0;
+        const shippingState = shippingAddress?.state?.toLowerCase();
+        
+        if (taxAmount > 0) {
+          if (shippingState === 'rajasthan') {
+            const cgst = Math.round(taxAmount / 2);
+            const sgst = taxAmount - cgst;
+            validatedTaxBreakdown = {
+              type: 'cgst_sgst',
+              cgst: cgst,
+              sgst: sgst,
+              igst: 0,
+              total: taxAmount,
+              rate: 0.03,
+              label: 'CGST (1.5%) + SGST (1.5%)',
+              description: 'Intra-state transaction (Rajasthan)'
+            };
+          } else {
+            validatedTaxBreakdown = {
+              type: 'igst',
+              cgst: 0,
+              sgst: 0,
+              igst: taxAmount,
+              total: taxAmount,
+              rate: 0.03,
+              label: 'IGST (3.0%)',
+              description: 'Inter-state transaction'
+            };
+          }
+        }
+      }
 
+      console.log('✅ Validated tax breakdown:', validatedTaxBreakdown);
+
+      // Use provided totals or calculate
+      const finalSubtotal = subtotal || calculatedSubtotal;
+      const finalDiscount = discount || 0;
+      const finalTax = tax || validatedTaxBreakdown.total || 0;
+      const finalShipping = shippingCharges || 0;
+      const finalTotal = total || (finalSubtotal - finalDiscount + finalTax + finalShipping);
+
+      // Create order
       const orderNumber = await generateOrderNumber();
 
       const order = new Order({
@@ -111,30 +232,31 @@ class OrderController {
         userEmail: user.email,
         userName: `${user.firstName} ${user.lastName}`,
         items: orderItems,
-        subtotal,
-        discount,
-        tax,
-        shippingCharges,
-        total,
-        paymentMethod,
+        subtotal: finalSubtotal,
+        discount: finalDiscount,
+        tax: finalTax,
+        taxBreakdown: validatedTaxBreakdown, // ✅ Store tax breakdown
+        shippingCharges: finalShipping,
+        total: finalTotal,
+        paymentMethod: paymentMethod || 'Card',
         paymentStatus: paymentMethod === 'COD' ? 'COD' : 'Paid',
         paymentDate: new Date(),
         transactionId: paymentDetails?.transactionId || `TXN-${Date.now()}`,
         shippingAddress: {
-          fullName: shippingAddress.fullName || `${user.firstName} ${user.lastName}`,
-          addressLine1: shippingAddress.addressLine1,
-          addressLine2: shippingAddress.addressLine2 || '',
-          city: shippingAddress.city,
-          state: shippingAddress.state,
-          postalCode: shippingAddress.postalCode,
-          country: shippingAddress.country || 'India',
-          phoneNumber: shippingAddress.phoneNumber || user.mobileNumber,
+          fullName: shippingAddress?.fullName || `${user.firstName} ${user.lastName}`,
+          addressLine1: shippingAddress?.addressLine1 || '',
+          addressLine2: shippingAddress?.addressLine2 || '',
+          city: shippingAddress?.city || '',
+          state: shippingAddress?.state || '',
+          postalCode: shippingAddress?.postalCode || '',
+          country: shippingAddress?.country || 'India',
+          phoneNumber: shippingAddress?.phoneNumber || user.mobileNumber,
         },
-        shippingMethod: req.body.shippingMethod || 'Standard',
+        shippingMethod: shippingMethod || 'Standard',
         shippingStatus: 'Processing',
         status: 'Processing',
         couponCode: couponCode || '',
-        couponDiscount: discount > 0 ? discount : 0,
+        couponDiscount: finalDiscount > 0 ? finalDiscount : 0,
         customerNote: customerNote || '',
         statusHistory: [{
           status: 'Processing',
@@ -147,6 +269,7 @@ class OrderController {
       await order.save();
 
       console.log('✅ Order created successfully:', order.orderNumber);
+      console.log('📊 Tax breakdown saved:', order.taxBreakdown);
 
       res.status(201).json({
         success: true,
@@ -256,7 +379,6 @@ class OrderController {
         stats = await this.getOrderStats();
       } catch (statsError) {
         console.error('❌ Error calculating stats:', statsError);
-        // Use fallback stats
         stats.total = totalCount;
       }
 
@@ -710,11 +832,29 @@ class OrderController {
         { $sort: { revenue: -1 } }
       ]);
 
+      // ✅ Get tax breakdown analytics
+      const taxAnalytics = await Order.aggregate([
+        {
+          $match: {
+            status: { $in: ['Delivered', 'Processing', 'Shipped'] }
+          }
+        },
+        {
+          $group: {
+            _id: '$taxBreakdown.type',
+            count: { $sum: 1 },
+            totalTax: { $sum: '$taxBreakdown.total' },
+            totalOrders: { $sum: 1 }
+          }
+        }
+      ]);
+
       res.json({
         success: true,
         data: {
           timeline: revenueData,
           categoryBreakdown: categoryRevenue,
+          taxBreakdown: taxAnalytics, // ✅ Added tax analytics
           summary: {
             totalRevenue: revenueData.reduce((sum, d) => sum + d.revenue, 0),
             totalOrders: revenueData.reduce((sum, d) => sum + d.orders, 0),
@@ -730,6 +870,135 @@ class OrderController {
       res.status(500).json({
         success: false,
         message: 'Error fetching revenue analytics',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get order invoice with tax breakdown
+   */
+  async getOrderInvoice(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.userId;
+      const isAdmin = req.user?.role === 'admin';
+
+      const order = await Order.findById(id)
+        .populate('userId', 'firstName lastName email mobileNumber')
+        .populate('items.productId', 'name sku');
+
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found'
+        });
+      }
+
+      if (!isAdmin && order.userId._id.toString() !== userId.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Unauthorized to view this invoice'
+        });
+      }
+
+      // Format invoice data
+      const invoice = {
+        invoiceNumber: `INV-${order.orderNumber}`,
+        orderNumber: order.orderNumber,
+        orderDate: order.createdAt,
+        customer: {
+          name: order.shippingAddress.fullName,
+          email: order.userEmail,
+          phone: order.shippingAddress.phoneNumber,
+          address: `${order.shippingAddress.addressLine1}, ${order.shippingAddress.city}, ${order.shippingAddress.state} - ${order.shippingAddress.postalCode}`,
+        },
+        items: order.items.map(item => ({
+          name: item.productName,
+          quantity: item.quantity,
+          price: item.price,
+          total: item.total,
+        })),
+        subtotal: order.subtotal,
+        discount: order.discount,
+        tax: order.tax,
+        taxBreakdown: order.taxBreakdown, // ✅ Include tax breakdown
+        shippingCharges: order.shippingCharges,
+        total: order.total,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        shippingMethod: order.shippingMethod,
+        status: order.status,
+      };
+
+      res.json({
+        success: true,
+        data: invoice
+      });
+
+    } catch (error) {
+      console.error('❌ Error generating invoice:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error generating invoice',
+        error: error.message
+      });
+    }
+  }
+  /**
+   * Get order by ID with payment details
+   */
+  async getOrderWithPaymentDetails(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.userId;
+      const isAdmin = req.user?.role === 'admin';
+
+      const order = await Order.findById(id)
+        .populate('userId', 'firstName lastName email mobileNumber')
+        .populate('items.productId', 'name images metal category');
+
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found'
+        });
+      }
+
+      if (!isAdmin && order.userId._id.toString() !== userId.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not authorized to view this order'
+        });
+      }
+
+      // Return enhanced order with payment details
+      const enhancedOrder = order.toJSON();
+      
+      // Check if payment is completed
+      if (order.paymentStatus === 'Paid' || order.paymentStatus === 'COD') {
+        enhancedOrder.paymentCompleted = true;
+      } else {
+        enhancedOrder.paymentCompleted = false;
+      }
+
+      // Determine if payment is due
+      if (['Pending', 'Initiated', 'Failed'].includes(order.paymentStatus)) {
+        enhancedOrder.paymentDue = true;
+      } else {
+        enhancedOrder.paymentDue = false;
+      }
+
+      res.json({
+        success: true,
+        data: enhancedOrder
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching order with payment:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching order',
         error: error.message
       });
     }

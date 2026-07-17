@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
+  // ========== PERSONAL FIELDS ==========
   username: {
     type: String,
     required: true,
@@ -32,25 +33,139 @@ const userSchema = new mongoose.Schema({
     match: /^[0-9]{10}$/,
     index: true,
   },
-  // backend/models/User.js
-email: {
-  type: String,
-  required: true,
-  unique: true,
-  trim: true,
-  // ✅ This is the cleanest approach
-  set: function(email) {
-    // Normalize: Trim, convert to lowercase, but preserve dots
-    return email.trim().toLowerCase();
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    set: function(email) {
+      return email.trim().toLowerCase();
+    },
+    match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    index: true,
   },
-  match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-  index: true,
-},
   password: {
     type: String,
     required: true,
     minlength: 8,
   },
+
+  // ========== ACCOUNT TYPE ==========
+  accountType: {
+    type: String,
+    enum: ['personal', 'business'],
+    default: 'personal',
+    required: true,
+  },
+
+  // ========== BUSINESS FIELDS (Only for business accounts) ==========
+  businessDetails: {
+    businessName: {
+      type: String,
+      trim: true,
+      required: function() {
+        return this.accountType === 'business';
+      },
+    },
+    businessType: {
+      type: String,
+      trim: true,
+      required: function() {
+        return this.accountType === 'business';
+      },
+      enum: [
+        'Sole Proprietorship',
+        'Partnership',
+        'Private Limited Company',
+        'Public Limited Company',
+        'Limited Liability Partnership (LLP)',
+        'One Person Company (OPC)',
+        'Section 8 Company (Non-Profit)',
+        'Hindu Undivided Family (HUF)',
+        'Other'
+      ],
+    },
+    gstNumber: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      unique: true,
+      sparse: true, // Allows multiple null values
+      validate: {
+        validator: function(v) {
+          // GST Format: 22AAAAA0000A1Z5 (15 characters)
+          if (!v) return true; // Optional field
+          const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+          return gstRegex.test(v);
+        },
+        message: 'Please enter a valid GST number (Format: 22AAAAA0000A1Z5)',
+      },
+    },
+    panNumber: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      unique: true,
+      sparse: true, // Allows multiple null values
+      validate: {
+        validator: function(v) {
+          // PAN Format: ABCDE1234F (10 characters)
+          if (!v) return true; // Optional field
+          const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+          return panRegex.test(v);
+        },
+        message: 'Please enter a valid PAN number (Format: ABCDE1234F)',
+      },
+    },
+    businessAddress: {
+      type: String,
+      trim: true,
+      required: function() {
+        return this.accountType === 'business';
+      },
+    },
+    businessPhone: {
+      type: String,
+      trim: true,
+      required: function() {
+        return this.accountType === 'business';
+      },
+      match: /^[0-9]{10}$/,
+    },
+    businessEmail: {
+      type: String,
+      trim: true,
+      required: function() {
+        return this.accountType === 'business';
+      },
+      set: function(email) {
+        return email.trim().toLowerCase();
+      },
+      match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    },
+    website: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    yearsInBusiness: {
+      type: Number,
+      min: 0,
+      required: function() {
+        return this.accountType === 'business';
+      },
+    },
+    gstVerified: {
+      type: Boolean,
+      default: false,
+    },
+    panVerified: {
+      type: Boolean,
+      default: false,
+    },
+  },
+
+  // ========== COMMON FIELDS ==========
   isVerified: {
     type: Boolean,
     default: false,
@@ -84,19 +199,16 @@ email: {
     type: Date,
     default: null,
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
 }, {
   timestamps: true,
 });
 
-// Hash password before saving
+// ========== INDEXES ==========
+userSchema.index({ email: 1, username: 1 });
+userSchema.index({ 'businessDetails.gstNumber': 1 }, { unique: true, sparse: true });
+userSchema.index({ 'businessDetails.panNumber': 1 }, { unique: true, sparse: true });
+
+// ========== HASH PASSWORD BEFORE SAVING ==========
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
@@ -109,7 +221,6 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-// Hash password for findOneAndUpdate operations
 userSchema.pre('findOneAndUpdate', async function(next) {
   const update = this.getUpdate();
   if (update.password) {
@@ -123,13 +234,13 @@ userSchema.pre('findOneAndUpdate', async function(next) {
   next();
 });
 
-// Compare password method
+// ========== COMPARE PASSWORD METHOD ==========
 userSchema.methods.comparePassword = async function(candidatePassword) {
   if (!candidatePassword || !this.password) return false;
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Remove sensitive data from JSON response
+// ========== REMOVE SENSITIVE DATA FROM JSON ==========
 userSchema.set('toJSON', {
   transform: function(doc, ret) {
     delete ret.password;
@@ -139,9 +250,6 @@ userSchema.set('toJSON', {
     return ret;
   }
 });
-
-// Add compound index for unique constraints
-userSchema.index({ email: 1, username: 1 });
 
 const User = mongoose.model('User', userSchema);
 module.exports = User;

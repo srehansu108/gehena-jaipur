@@ -3,12 +3,17 @@
 const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/orderController');
+const paymentRoutes = require('./paymentRoutes');
 const { authenticate, authorize } = require('../middleware/auth');
+
+// ============ PAYMENT ROUTES ============
+router.use('/payments', paymentRoutes);
 
 // ============ USER ROUTES ============
 router.post('/', authenticate, orderController.createOrder);
 router.get('/my-orders', authenticate, orderController.getMyOrders);
 router.get('/:id', authenticate, orderController.getOrderById);
+router.get('/:id/payment', authenticate, orderController.getOrderWithPaymentDetails);
 router.put('/:id/cancel', authenticate, orderController.cancelOrder);
 
 // ============ ADMIN ROUTES ============
