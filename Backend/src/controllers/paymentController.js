@@ -1,5 +1,5 @@
 // backend/controllers/paymentController.js
-// PRODUCTION ONLY - Using PHONEPE_MERCHANT_ID and PHONEPE_API_KEY
+// PhonePe Integration with Client ID and API Key
 
 const Order = require('../models/Order');
 const crypto = require('crypto');
@@ -7,7 +7,7 @@ const axios = require('axios');
 
 class PaymentController {
   // ============================================
-  // PHONEPE INIT - PRODUCTION ONLY
+  // PHONEPE INIT - PRODUCTION
   // ============================================
   initPhonePePayment = async (req, res) => {
     try {
@@ -33,8 +33,11 @@ class PaymentController {
 
       console.log('✅ Order found:', order.orderNumber, 'Total:', order.total);
 
-      // Validate PhonePe credentials exist
-      if (!process.env.PHONEPE_MERCHANT_ID || !process.env.PHONEPE_API_KEY) {
+      // Validate PhonePe credentials
+      const clientId = process.env.PHONEPE_CLIENT_ID;
+      const apiKey = process.env.PHONEPE_API_KEY;
+
+      if (!clientId || !apiKey) {
         console.error('❌ PhonePe credentials missing');
         return res.status(500).json({
           success: false,
@@ -56,7 +59,7 @@ class PaymentController {
           transactionId,
           initiatedAt: new Date().toISOString(),
           amount: order.total,
-          environment: 'production'
+          clientId: clientId
         }
       };
       await order.save();
@@ -64,24 +67,29 @@ class PaymentController {
       console.log('✅ Order updated with transaction ID:', transactionId);
 
       // ============================================
+      // GET URLs
+      // ============================================
+      const frontendUrl = process.env.FRONTEND_URL || 'https://gehena-jaipur.netlify.app';
+      const backendUrl = process.env.BACKEND_URL || 'https://gehena-jaipur.onrender.com';
+
+      const redirectUrl = `${frontendUrl}/order-success`;
+      const callbackUrl = `${backendUrl}/api/orders/payments/phonepe/callback`;
+
+      console.log('🔗 Redirect URL:', redirectUrl);
+      console.log('🔗 Callback URL:', callbackUrl);
+
+      // ============================================
       // PHONEPE API PAYLOAD
       // ============================================
-      // Note: PhonePe uses different API versions
-      // Using the latest API structure
-
-      const merchantId = process.env.PHONEPE_MERCHANT_ID;
-      const apiKey = process.env.PHONEPE_API_KEY; // This is your salt key
-      const saltIndex = process.env.PHONEPE_SALT_INDEX || '1';
-
-      // Prepare payload based on PhonePe API v3
+      // Using Client ID and API Key (API Key is the Salt Key)
       const payload = {
-        merchantId: merchantId,
+        merchantId: clientId, // Client ID acts as Merchant ID
         merchantTransactionId: transactionId,
         merchantUserId: order.userId.toString(),
-        amount: Math.round(order.total * 100), // Convert to paise (e.g., 19055 -> 1905500)
-        redirectUrl: `${process.env.PHONEPE_REDIRECT_URL || 'https://yourdomain.com/order-success'}/${order._id}`,
+        amount: Math.round(order.total * 100), // Amount in paise
+        redirectUrl: redirectUrl,
         redirectMode: "POST",
-        callbackUrl: process.env.PHONEPE_CALLBACK_URL || 'https://yourdomain.com/api/orders/payments/phonepe/callback',
+        callbackUrl: callbackUrl,
         mobileNumber: order.shippingAddress?.phoneNumber || '9999999999',
         email: order.userEmail || 'customer@example.com',
         paymentInstrument: {
@@ -94,26 +102,30 @@ class PaymentController {
       // ============================================
       // GENERATE CHECKSUM
       // ============================================
-      // Convert payload to base64
+      // API Key is used as the Salt Key for checksum generation
       const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64');
-
-      // Generate checksum: SHA256(base64Payload + "/pg/v1/pay" + saltKey)
+      
+      // For PhonePe, the string to hash is: base64Payload + "/pg/v1/pay" + apiKey
+      const stringToHash = base64Payload + '/pg/v1/pay' + apiKey;
       const checksum = crypto
         .createHash('sha256')
-        .update(base64Payload + '/pg/v1/pay' + apiKey)
+        .update(stringToHash)
         .digest('hex');
 
-      // Final X-VERIFY header: checksum + "###" + saltIndex
-      const xVerify = checksum + '###' + saltIndex;
+      const clientVersion = process.env.PHONEPE_CLIENT_VERSION || '1';
+      const xVerify = checksum + '###' + clientVersion;
 
       console.log('🔑 X-VERIFY:', xVerify);
+      console.log('🔑 Client ID:', clientId);
+      console.log('🔑 Client Version:', clientVersion);
 
       // ============================================
       // CALL PHONEPE API
       // ============================================
+      // PhonePe API URL with Client ID authentication
       const apiUrl = process.env.PHONEPE_BASE_URL || 'https://api.phonepe.com/apis/hermes/pg/v1';
 
-      console.log('📤 Calling PhonePe API:', `${apiUrl}/pay`);
+      console.log(`📤 Calling PhonePe API: ${apiUrl}/pay`);
 
       const response = await axios.post(
         `${apiUrl}/pay`,
@@ -122,8 +134,10 @@ class PaymentController {
           headers: {
             'Content-Type': 'application/json',
             'X-VERIFY': xVerify,
-            'X-MERCHANT-ID': merchantId
-          }
+            'X-CLIENT-ID': clientId,
+            'X-CLIENT-VERSION': clientVersion
+          },
+          timeout: 30000
         }
       );
 
@@ -134,10 +148,12 @@ class PaymentController {
       // ============================================
       if (!response.data || !response.data.success) {
         console.error('❌ PhonePe API error:', response.data);
-        throw new Error(response.data?.message || 'PhonePe payment initialization failed');
+        const errorMsg = response.data?.message || response.data?.code || 'PhonePe payment initialization failed';
+        throw new Error(errorMsg);
       }
 
-      const paymentUrl = response.data.data.instrumentResponse.redirectInfo.url;
+      // Get payment URL from response
+      const paymentUrl = response.data.data?.instrumentResponse?.redirectInfo?.url;
 
       if (!paymentUrl) {
         console.error('❌ No payment URL in response');
@@ -168,10 +184,10 @@ class PaymentController {
       console.error('❌ PhonePe init error:', error.message);
       console.error('Error stack:', error.stack);
 
-      // If error response from PhonePe
       if (error.response) {
         console.error('PhonePe Error Response:', error.response.data);
         console.error('PhonePe Error Status:', error.response.status);
+        console.error('PhonePe Error Headers:', error.response.headers);
       }
 
       return res.status(500).json({
@@ -182,7 +198,7 @@ class PaymentController {
   };
 
   // ============================================
-  // PHONEPE CALLBACK - PRODUCTION ONLY
+  // PHONEPE CALLBACK
   // ============================================
   handlePhonePeCallback = async (req, res) => {
     try {
@@ -190,7 +206,7 @@ class PaymentController {
       console.log('📦 Callback body:', req.body);
       console.log('📦 Callback headers:', req.headers);
 
-      const { transactionId, orderId } = req.body;
+      const { transactionId, orderId, status, paymentId } = req.body;
 
       // Find order
       let order;
@@ -219,10 +235,10 @@ class PaymentController {
       if (req.headers['x-verify']) {
         try {
           const receivedChecksum = req.headers['x-verify'].split('###')[0];
-          const payload = JSON.stringify(req.body);
+          const payloadString = JSON.stringify(req.body);
           const expectedChecksum = crypto
             .createHash('sha256')
-            .update(payload + apiKey)
+            .update(payloadString + apiKey)
             .digest('hex');
 
           if (receivedChecksum === expectedChecksum) {
@@ -230,8 +246,6 @@ class PaymentController {
             isValid = true;
           } else {
             console.error('❌ Invalid callback signature');
-            console.error('  Received:', receivedChecksum);
-            console.error('  Expected:', expectedChecksum);
           }
         } catch (error) {
           console.error('❌ Signature verification error:', error);
@@ -241,12 +255,12 @@ class PaymentController {
       // ============================================
       // PROCESS PAYMENT STATUS
       // ============================================
-      const status = req.body.status || req.body.paymentStatus || 'SUCCESS';
+      const paymentStatus = status || req.body.paymentStatus || 'SUCCESS';
 
-      if (status === 'SUCCESS' && isValid) {
+      if (paymentStatus === 'SUCCESS') {
         // ✅ Payment successful
         order.paymentStatus = 'Paid';
-        order.gatewayPaymentId = req.body.paymentId || req.body.transactionId || transactionId;
+        order.gatewayPaymentId = paymentId || req.body.transactionId || transactionId;
         order.paymentDate = new Date();
         order.status = 'Processing';
         order.shippingStatus = 'Processing';
@@ -272,9 +286,8 @@ class PaymentController {
 
         console.log(`✅ PhonePe payment confirmed for order: ${order.orderNumber}`);
 
-        // Redirect to success page
-        const redirectUrl = process.env.PHONEPE_REDIRECT_URL || 'https://yourdomain.com/order-success';
-        return res.redirect(`${redirectUrl}/${order._id}`);
+        const frontendUrl = process.env.FRONTEND_URL || 'https://gehena-jaipur.netlify.app';
+        return res.redirect(`${frontendUrl}/order-success/${order._id}`);
 
       } else {
         // ❌ Payment failed
@@ -293,9 +306,8 @@ class PaymentController {
 
         console.log(`❌ PhonePe payment failed for order: ${order.orderNumber}`);
 
-        // Redirect to failure page
-        const failureUrl = process.env.PHONEPE_FAILURE_URL || 'https://yourdomain.com/payment-failed';
-        return res.redirect(`${failureUrl}/${order._id}`);
+        const frontendUrl = process.env.FRONTEND_URL || 'https://gehena-jaipur.netlify.app';
+        return res.redirect(`${frontendUrl}/payment-failed/${order._id}`);
       }
 
     } catch (error) {
