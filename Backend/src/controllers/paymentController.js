@@ -1,5 +1,5 @@
 // backend/controllers/paymentController.js
-// FIXED: Sandbox/Test Mode Support
+// COMPLETE PRODUCTION-READY PAYMENT CONTROLLER
 
 const Order = require('../models/Order');
 const crypto = require('crypto');
@@ -81,12 +81,11 @@ class PaymentController {
       // ============================================
       // PHONEPE API PAYLOAD
       // ============================================
-      // Using Client ID as Merchant ID
       const payload = {
         merchantId: clientId,
         merchantTransactionId: transactionId,
         merchantUserId: order.userId.toString(),
-        amount: Math.round(order.total * 100), // Amount in paise
+        amount: Math.round(order.total * 100),
         redirectUrl: redirectUrl,
         redirectMode: "POST",
         callbackUrl: callbackUrl,
@@ -104,74 +103,79 @@ class PaymentController {
       // ============================================
       const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64');
       
-      // For PhonePe, the string to hash is: base64Payload + "/pg/v1/pay" + apiKey
       const stringToHash = base64Payload + '/pg/v1/pay' + apiKey;
       const checksum = crypto
         .createHash('sha256')
         .update(stringToHash)
         .digest('hex');
 
-      const clientVersion = process.env.PHONEPE_CLIENT_VERSION || '1';
-      const xVerify = checksum + '###' + clientVersion;
+      const saltIndex = process.env.PHONEPE_SALT_INDEX || '1';
+      const xVerify = checksum + '###' + saltIndex;
 
       console.log('🔑 X-VERIFY:', xVerify);
 
       // ============================================
-      // TRY MULTIPLE PHONEPE API ENDPOINTS
+      // CALL PHONEPE API - TRY MULTIPLE ENDPOINTS
       // ============================================
-      // Try both sandbox and production URLs
-      const apiEndpoints = [
-        'https://api.phonepe.com/apis/hermes/sandbox/pg/v1/pay',
-        'https://api.phonepe.com/apis/hermes/pg/v1/pay',
-        'https://api.phonepe.com/apis/merchant/v1/pay'
+      const endpoints = [
+        {
+          url: 'https://api.phonepe.com/apis/hermes/sandbox/pg/v1/pay',
+          name: 'Sandbox'
+        },
+        {
+          url: 'https://api.phonepe.com/apis/hermes/pg/v1/pay',
+          name: 'Production'
+        },
+        {
+          url: 'https://api.phonepe.com/apis/merchant/v1/pay',
+          name: 'Merchant API'
+        }
       ];
 
       let response = null;
       let usedEndpoint = '';
 
-      for (const endpoint of apiEndpoints) {
+      for (const endpoint of endpoints) {
         try {
-          console.log(`📤 Trying PhonePe API: ${endpoint}`);
+          console.log(`📤 Trying ${endpoint.name} API: ${endpoint.url}`);
           
           response = await axios.post(
-            endpoint,
+            endpoint.url,
             { request: base64Payload },
             {
               headers: {
                 'Content-Type': 'application/json',
-                'X-VERIFY': xVerify,
-                'X-CLIENT-ID': clientId,
-                'X-CLIENT-VERSION': clientVersion
+                'X-VERIFY': xVerify
               },
               timeout: 30000
             }
           );
           
           if (response.data && response.data.success) {
-            usedEndpoint = endpoint;
-            console.log(`✅ Success with endpoint: ${endpoint}`);
+            usedEndpoint = endpoint.url;
+            console.log(`✅ Success with ${endpoint.name} API`);
             break;
           }
         } catch (error) {
-          console.log(`❌ Failed with endpoint: ${endpoint}`);
-          console.log(`   Status: ${error.response?.status}`);
-          console.log(`   Data: ${JSON.stringify(error.response?.data)}`);
+          console.log(`❌ ${endpoint.name} API failed:`, error.response?.status);
+          console.log('   Response:', error.response?.data);
           
-          // If we get a response with data, store it
+          // If we get a 400 with a specific message, try the next
+          if (error.response?.status === 400 && error.response?.data?.message?.includes('Mapping')) {
+            console.log('⚠️ API Mapping error, trying next endpoint...');
+            continue;
+          }
+          
+          // Store the last response for error handling
           if (error.response) {
             response = error.response;
-            usedEndpoint = endpoint;
-            
-            // If it's not a 404, break (this might be the right endpoint)
-            if (error.response?.status !== 404) {
-              break;
-            }
+            usedEndpoint = endpoint.url;
           }
         }
       }
 
-      if (!response) {
-        throw new Error('All PhonePe API endpoints failed - No response received');
+      if (!response || !response.data) {
+        throw new Error('All PhonePe API endpoints failed');
       }
 
       console.log('📦 PhonePe API Response:', JSON.stringify(response.data, null, 2));
@@ -179,17 +183,12 @@ class PaymentController {
       // ============================================
       // PROCESS RESPONSE
       // ============================================
-      if (!response.data) {
-        throw new Error('No response data from PhonePe');
-      }
-
       if (!response.data.success) {
         console.error('❌ PhonePe API error:', response.data);
         const errorMsg = response.data?.message || response.data?.code || 'PhonePe payment initialization failed';
         throw new Error(errorMsg);
       }
 
-      // Get payment URL from response
       const paymentUrl = response.data.data?.instrumentResponse?.redirectInfo?.url;
 
       if (!paymentUrl) {
@@ -223,14 +222,11 @@ class PaymentController {
       console.error('❌ PhonePe init error:', error.message);
       console.error('Error stack:', error.stack);
 
-      // If error response from PhonePe
       if (error.response) {
         console.error('PhonePe Error Response:', error.response.data);
         console.error('PhonePe Error Status:', error.response.status);
-        console.error('PhonePe Error Headers:', error.response.headers);
       }
 
-      // Return a more detailed error message
       let errorMessage = 'Failed to initialize PhonePe payment';
       if (error.message) {
         errorMessage = error.message;
@@ -241,12 +237,7 @@ class PaymentController {
 
       return res.status(500).json({
         success: false,
-        message: errorMessage,
-        details: process.env.NODE_ENV === 'development' ? {
-          error: error.message,
-          stack: error.stack,
-          response: error.response?.data
-        } : undefined
+        message: errorMessage
       });
     }
   };
@@ -378,6 +369,9 @@ class PaymentController {
   // ============================================
   initRazorpayPayment = async (req, res) => {
     try {
+      console.log('💳 initRazorpayPayment called');
+      console.log('📦 Order ID:', req.body.orderId);
+
       const { orderId } = req.body;
 
       if (!orderId) {
@@ -395,11 +389,14 @@ class PaymentController {
         });
       }
 
+      console.log('✅ Order found:', order.orderNumber, 'Total:', order.total);
+
+      // Validate Razorpay credentials
       if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
         console.error('❌ Razorpay credentials missing');
         return res.status(500).json({
           success: false,
-          message: 'Payment gateway configuration error'
+          message: 'Razorpay configuration error'
         });
       }
 
@@ -415,12 +412,18 @@ class PaymentController {
         receipt: order.orderNumber,
         notes: {
           orderId: order._id.toString(),
-          orderNumber: order.orderNumber
+          orderNumber: order.orderNumber,
+          userId: order.userId?.toString() || ''
         }
       };
 
+      console.log('📤 Razorpay Order Options:', options);
+
       const razorpayOrder = await instance.orders.create(options);
 
+      console.log('✅ Razorpay Order Created:', razorpayOrder.id);
+
+      // Store gateway info
       order.gatewayOrderId = razorpayOrder.id;
       order.paymentGateway = 'razorpay';
       order.paymentStatus = 'Initiated';
@@ -431,6 +434,8 @@ class PaymentController {
       };
       await order.save();
 
+      console.log('✅ Order updated with Razorpay Order ID');
+
       return res.json({
         success: true,
         data: {
@@ -438,7 +443,8 @@ class PaymentController {
           amount: razorpayOrder.amount,
           currency: razorpayOrder.currency,
           keyId: process.env.RAZORPAY_KEY_ID,
-          orderNumber: order.orderNumber
+          orderNumber: order.orderNumber,
+          orderId: order._id
         }
       });
 
@@ -456,8 +462,20 @@ class PaymentController {
   // ============================================
   verifyRazorpayPayment = async (req, res) => {
     try {
+      console.log('🔐 verifyRazorpayPayment called');
+      console.log('📦 Request body:', req.body);
+
       const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderId } = req.body;
 
+      // Validate required fields
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !orderId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required payment verification fields'
+        });
+      }
+
+      // Verify signature
       const body = razorpay_order_id + '|' + razorpay_payment_id;
       const expectedSignature = crypto
         .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
@@ -465,11 +483,14 @@ class PaymentController {
         .digest('hex');
 
       if (expectedSignature !== razorpay_signature) {
+        console.error('❌ Invalid Razorpay signature');
         return res.status(400).json({
           success: false,
           message: 'Invalid payment signature'
         });
       }
+
+      console.log('✅ Razorpay signature verified');
 
       const order = await Order.findById(orderId);
       if (!order) {
@@ -479,6 +500,7 @@ class PaymentController {
         });
       }
 
+      // Update order
       order.paymentStatus = 'Paid';
       order.gatewayPaymentId = razorpay_payment_id;
       order.gatewaySignature = razorpay_signature;
@@ -494,7 +516,19 @@ class PaymentController {
         updatedBy: 'System'
       });
 
+      order.paymentMetadata = {
+        ...order.paymentMetadata,
+        razorpayVerification: {
+          razorpayOrderId: razorpay_order_id,
+          razorpayPaymentId: razorpay_payment_id,
+          razorpaySignature: razorpay_signature,
+          verifiedAt: new Date().toISOString()
+        }
+      };
+
       await order.save();
+
+      console.log(`✅ Razorpay payment verified for order: ${order.orderNumber}`);
 
       return res.json({
         success: true,
@@ -512,11 +546,21 @@ class PaymentController {
   };
 
   // ============================================
-  // COD
+  // COD PAYMENT
   // ============================================
   handleCODPayment = async (req, res) => {
     try {
+      console.log('📦 handleCODPayment called');
+      console.log('📦 Order ID:', req.body.orderId);
+
       const { orderId } = req.body;
+
+      if (!orderId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Order ID is required'
+        });
+      }
 
       const order = await Order.findById(orderId);
       if (!order) {
@@ -526,6 +570,9 @@ class PaymentController {
         });
       }
 
+      console.log(`✅ Order found: ${order.orderNumber}`);
+
+      // Update order for COD
       order.paymentStatus = 'COD';
       order.paymentGateway = 'cod';
       order.paymentDate = new Date();
@@ -539,7 +586,17 @@ class PaymentController {
         updatedBy: 'System'
       });
 
+      order.paymentMetadata = {
+        ...order.paymentMetadata,
+        codConfirmation: {
+          confirmedAt: new Date().toISOString(),
+          paymentMethod: 'COD'
+        }
+      };
+
       await order.save();
+
+      console.log(`✅ COD order confirmed: ${order.orderNumber}`);
 
       return res.json({
         success: true,
@@ -561,7 +618,17 @@ class PaymentController {
   // ============================================
   getPaymentStatus = async (req, res) => {
     try {
+      console.log('📊 getPaymentStatus called');
+      console.log('📦 Order ID:', req.params.orderId);
+
       const { orderId } = req.params;
+
+      if (!orderId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Order ID is required'
+        });
+      }
 
       const order = await Order.findById(orderId);
       if (!order) {
@@ -570,6 +637,8 @@ class PaymentController {
           message: 'Order not found'
         });
       }
+
+      console.log(`✅ Payment status for order ${order.orderNumber}: ${order.paymentStatus}`);
 
       return res.json({
         success: true,
@@ -580,8 +649,11 @@ class PaymentController {
           paymentMethod: order.paymentMethod,
           paymentGateway: order.paymentGateway,
           amount: order.total,
-          transactionId: order.transactionId,
-          paidAt: order.paymentDate
+          transactionId: order.transactionId || order.gatewayOrderId,
+          gatewayPaymentId: order.gatewayPaymentId,
+          paidAt: order.paymentDate,
+          status: order.status,
+          shippingStatus: order.shippingStatus
         }
       });
 
@@ -590,6 +662,64 @@ class PaymentController {
       return res.status(500).json({
         success: false,
         message: 'Error fetching payment status'
+      });
+    }
+  };
+
+  // ============================================
+  // GET ORDER WITH PAYMENT DETAILS
+  // ============================================
+  getOrderWithPaymentDetails = async (req, res) => {
+    try {
+      console.log('📋 getOrderWithPaymentDetails called');
+      console.log('📦 Order ID:', req.params.id);
+
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Order ID is required'
+        });
+      }
+
+      const order = await Order.findById(id);
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found'
+        });
+      }
+
+      // Check if the user is authorized to view this order
+      if (order.userId && req.user && order.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Unauthorized to view this order'
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          order: order,
+          payment: {
+            status: order.paymentStatus,
+            method: order.paymentMethod,
+            gateway: order.paymentGateway,
+            transactionId: order.transactionId,
+            gatewayPaymentId: order.gatewayPaymentId,
+            paidAt: order.paymentDate,
+            metadata: order.paymentMetadata
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Get order with payment details error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Error fetching order details'
       });
     }
   };

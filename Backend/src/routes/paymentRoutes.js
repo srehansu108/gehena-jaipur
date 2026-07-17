@@ -19,4 +19,7 @@ router.post('/cod/confirm', authenticate, paymentController.handleCODPayment);
 // Payment Status
 router.get('/status/:orderId', authenticate, paymentController.getPaymentStatus);
 
+// Order with Payment Details
+router.get('/order/:id', authenticate, paymentController.getOrderWithPaymentDetails);
+
 module.exports = router;
