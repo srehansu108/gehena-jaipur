@@ -1,32 +1,18 @@
 // backend/controllers/paymentController.js
-// ✅ FIXED: All methods use arrow function syntax to preserve 'this' binding
+// PRODUCTION ONLY - Using PHONEPE_MERCHANT_ID and PHONEPE_API_KEY
 
 const Order = require('../models/Order');
 const crypto = require('crypto');
 const axios = require('axios');
-const razorpay = require('razorpay');
 
 class PaymentController {
   // ============================================
-  // GENERATE MOCK PAYMENT URL - ARROW FUNCTION ✅
-  // ============================================
-  generateMockPaymentUrl = (order, transactionId) => {
-    console.log('🎯 Generating mock payment URL for order:', order.orderNumber);
-    const mockBaseUrl = process.env.PHONEPE_MOCK_URL || 'http://localhost:5173/mock-phonepe';
-    return `${mockBaseUrl}?transactionId=${transactionId}&amount=${order.total}&orderId=${order._id}&orderNumber=${order.orderNumber}`;
-  };
-
-  // ============================================
-  // PHONEPE INIT - ARROW FUNCTION ✅
+  // PHONEPE INIT - PRODUCTION ONLY
   // ============================================
   initPhonePePayment = async (req, res) => {
     try {
       console.log('📱 initPhonePePayment called');
-      console.log('📦 Request body:', req.body);
-
-      console.log('🔑 PhonePe Environment:', process.env.PHONEPE_ENV || 'sandbox');
-      console.log('🔑 Merchant ID:', process.env.PHONEPE_MERCHANT_ID ? '✅ Set' : '❌ Missing');
-      console.log('🔑 Salt Key:', process.env.PHONEPE_SALT_KEY ? '✅ Set' : '❌ Missing');
+      console.log('📦 Order ID:', req.body.orderId);
 
       const { orderId } = req.body;
 
@@ -47,6 +33,15 @@ class PaymentController {
 
       console.log('✅ Order found:', order.orderNumber, 'Total:', order.total);
 
+      // Validate PhonePe credentials exist
+      if (!process.env.PHONEPE_MERCHANT_ID || !process.env.PHONEPE_API_KEY) {
+        console.error('❌ PhonePe credentials missing');
+        return res.status(500).json({
+          success: false,
+          message: 'Payment gateway configuration error'
+        });
+      }
+
       // Generate transaction ID
       const transactionId = `TXN_${Date.now()}_${order._id.toString().slice(-6)}`;
 
@@ -61,165 +56,143 @@ class PaymentController {
           transactionId,
           initiatedAt: new Date().toISOString(),
           amount: order.total,
-          environment: process.env.PHONEPE_ENV || 'sandbox'
+          environment: 'production'
         }
       };
       await order.save();
 
       console.log('✅ Order updated with transaction ID:', transactionId);
 
-      // CHECK: Are we in TESTING mode or PRODUCTION mode?
-      const isProduction = process.env.PHONEPE_ENV === 'production' &&
-                          process.env.PHONEPE_MERCHANT_ID &&
-                          process.env.PHONEPE_SALT_KEY;
+      // ============================================
+      // PHONEPE API PAYLOAD
+      // ============================================
+      // Note: PhonePe uses different API versions
+      // Using the latest API structure
 
-      let paymentUrl;
+      const merchantId = process.env.PHONEPE_MERCHANT_ID;
+      const apiKey = process.env.PHONEPE_API_KEY; // This is your salt key
+      const saltIndex = process.env.PHONEPE_SALT_INDEX || '1';
 
-      if (isProduction) {
-        // ============================================
-        // 🚀 PRODUCTION MODE - REAL PhonePe API
-        // ============================================
-        console.log('🚀 Using PRODUCTION PhonePe API');
+      // Prepare payload based on PhonePe API v3
+      const payload = {
+        merchantId: merchantId,
+        merchantTransactionId: transactionId,
+        merchantUserId: order.userId.toString(),
+        amount: Math.round(order.total * 100), // Convert to paise (e.g., 19055 -> 1905500)
+        redirectUrl: `${process.env.PHONEPE_REDIRECT_URL || 'https://yourdomain.com/order-success'}/${order._id}`,
+        redirectMode: "POST",
+        callbackUrl: process.env.PHONEPE_CALLBACK_URL || 'https://yourdomain.com/api/orders/payments/phonepe/callback',
+        mobileNumber: order.shippingAddress?.phoneNumber || '9999999999',
+        email: order.userEmail || 'customer@example.com',
+        paymentInstrument: {
+          type: "PAY_PAGE"
+        }
+      };
 
-        try {
-          const payload = {
-            merchantId: process.env.PHONEPE_MERCHANT_ID,
-            merchantTransactionId: transactionId,
-            merchantUserId: order.userId.toString(),
-            amount: Math.round(order.total * 100),
-            redirectUrl: `${process.env.PHONEPE_REDIRECT_URL || 'http://localhost:5173/order-success'}/${order._id}`,
-            redirectMode: "POST",
-            callbackUrl: process.env.PHONEPE_CALLBACK_URL || 'http://localhost:5000/api/orders/payments/phonepe/callback',
-            mobileNumber: order.shippingAddress?.phoneNumber || '9999999999',
-            email: order.userEmail || 'customer@example.com',
-            paymentInstrument: {
-              type: "PAY_PAGE"
-            }
-          };
+      console.log('📤 PhonePe Payload:', JSON.stringify(payload, null, 2));
 
-          console.log('📤 PhonePe Payload:', JSON.stringify(payload, null, 2));
+      // ============================================
+      // GENERATE CHECKSUM
+      // ============================================
+      // Convert payload to base64
+      const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64');
 
-          const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64');
-          const saltKey = process.env.PHONEPE_SALT_KEY;
-          const saltIndex = process.env.PHONEPE_SALT_INDEX || '1';
-          const checksum = crypto
-            .createHash('sha256')
-            .update(base64Payload + '/pg/v1/pay' + saltKey)
-            .digest('hex');
+      // Generate checksum: SHA256(base64Payload + "/pg/v1/pay" + saltKey)
+      const checksum = crypto
+        .createHash('sha256')
+        .update(base64Payload + '/pg/v1/pay' + apiKey)
+        .digest('hex');
 
-          const apiUrl = process.env.PHONEPE_BASE_URL || 'https://api.phonepe.com/apis/hermes/pg/v1';
+      // Final X-VERIFY header: checksum + "###" + saltIndex
+      const xVerify = checksum + '###' + saltIndex;
 
-          console.log('📤 Calling PhonePe API:', `${apiUrl}/pay`);
+      console.log('🔑 X-VERIFY:', xVerify);
 
-          const response = await axios.post(
-            `${apiUrl}/pay`,
-            { request: base64Payload },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'X-VERIFY': checksum + '###' + saltIndex,
-                'X-MERCHANT-ID': process.env.PHONEPE_MERCHANT_ID
-              }
-            }
-          );
+      // ============================================
+      // CALL PHONEPE API
+      // ============================================
+      const apiUrl = process.env.PHONEPE_BASE_URL || 'https://api.phonepe.com/apis/hermes/pg/v1';
 
-          console.log('📦 PhonePe API Response:', response.data);
+      console.log('📤 Calling PhonePe API:', `${apiUrl}/pay`);
 
-          if (response.data && response.data.success) {
-            paymentUrl = response.data.data.instrumentResponse.redirectInfo.url;
-          } else {
-            throw new Error(response.data.message || 'PhonePe API error');
+      const response = await axios.post(
+        `${apiUrl}/pay`,
+        { request: base64Payload },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-VERIFY': xVerify,
+            'X-MERCHANT-ID': merchantId
           }
-
-        } catch (phonepeError) {
-          console.error('❌ PhonePe API error:', phonepeError);
-          console.log('⚠️ Falling back to MOCK mode due to API error');
-          paymentUrl = this.generateMockPaymentUrl(order, transactionId);
         }
+      );
 
-      } else {
-        // ============================================
-        // 🧪 TESTING MODE - Mock PhonePe
-        // ============================================
-        console.log('🧪 Using TESTING (Mock) PhonePe');
+      console.log('📦 PhonePe API Response:', JSON.stringify(response.data, null, 2));
 
-        if (!process.env.PHONEPE_MERCHANT_ID || !process.env.PHONEPE_SALT_KEY) {
-          console.warn('⚠️ PhonePe credentials not fully configured. Using MOCK mode.');
-        }
+      // ============================================
+      // PROCESS RESPONSE
+      // ============================================
+      if (!response.data || !response.data.success) {
+        console.error('❌ PhonePe API error:', response.data);
+        throw new Error(response.data?.message || 'PhonePe payment initialization failed');
+      }
 
-        paymentUrl = this.generateMockPaymentUrl(order, transactionId);
+      const paymentUrl = response.data.data.instrumentResponse.redirectInfo.url;
+
+      if (!paymentUrl) {
+        console.error('❌ No payment URL in response');
+        throw new Error('No payment URL received from PhonePe');
       }
 
       // Update order with payment URL
       order.paymentMetadata = {
         ...order.paymentMetadata,
-        phonepePaymentUrl: paymentUrl,
-        mode: isProduction ? 'production' : 'testing'
+        phonepePaymentUrl: paymentUrl
       };
       await order.save();
 
-      console.log('✅ Payment URL generated:', paymentUrl);
+      console.log('✅ PhonePe payment URL generated:', paymentUrl);
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           transactionId,
           paymentUrl,
           amount: order.total,
           orderNumber: order.orderNumber,
-          orderId: order._id,
-          mode: isProduction ? 'production' : 'testing'
+          orderId: order._id
         }
       });
 
     } catch (error) {
-      console.error('❌ PhonePe init error:');
-      console.error('Error Message:', error.message);
-      console.error('Error Stack:', error.stack);
+      console.error('❌ PhonePe init error:', error.message);
+      console.error('Error stack:', error.stack);
 
-      // FALLBACK: Use mock on error
-      try {
-        const { orderId } = req.body;
-        const order = await Order.findById(orderId);
-        if (order) {
-          const transactionId = `MOCK_${Date.now()}`;
-          const paymentUrl = this.generateMockPaymentUrl(order, transactionId);
-
-          return res.json({
-            success: true,
-            data: {
-              transactionId,
-              paymentUrl,
-              amount: order.total,
-              orderNumber: order.orderNumber,
-              orderId: order._id,
-              mode: 'testing_fallback'
-            }
-          });
-        }
-      } catch (fallbackError) {
-        console.error('❌ Fallback error:', fallbackError);
+      // If error response from PhonePe
+      if (error.response) {
+        console.error('PhonePe Error Response:', error.response.data);
+        console.error('PhonePe Error Status:', error.response.status);
       }
 
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
-        message: 'Failed to initialize PhonePe payment',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        message: error.message || 'Failed to initialize PhonePe payment'
       });
     }
   };
 
   // ============================================
-  // PHONEPE CALLBACK - ARROW FUNCTION ✅
+  // PHONEPE CALLBACK - PRODUCTION ONLY
   // ============================================
   handlePhonePeCallback = async (req, res) => {
     try {
       console.log('📞 PhonePe callback received');
-      console.log('📦 Callback data:', req.body);
+      console.log('📦 Callback body:', req.body);
       console.log('📦 Callback headers:', req.headers);
 
       const { transactionId, orderId } = req.body;
 
+      // Find order
       let order;
       if (transactionId) {
         order = await Order.findOne({ gatewayOrderId: transactionId });
@@ -237,34 +210,41 @@ class PaymentController {
 
       console.log(`✅ Order found: ${order.orderNumber}`);
 
-      // Verify callback signature (for production)
-      const isProduction = process.env.PHONEPE_ENV === 'production';
-      let isValid = true;
+      // ============================================
+      // VERIFY CALLBACK SIGNATURE
+      // ============================================
+      let isValid = false;
+      const apiKey = process.env.PHONEPE_API_KEY;
 
-      if (isProduction && req.headers['x-verify']) {
+      if (req.headers['x-verify']) {
         try {
           const receivedChecksum = req.headers['x-verify'].split('###')[0];
-          const saltKey = process.env.PHONEPE_SALT_KEY;
           const payload = JSON.stringify(req.body);
           const expectedChecksum = crypto
             .createHash('sha256')
-            .update(payload + saltKey)
+            .update(payload + apiKey)
             .digest('hex');
 
-          if (receivedChecksum !== expectedChecksum) {
+          if (receivedChecksum === expectedChecksum) {
+            console.log('✅ Callback signature verified');
+            isValid = true;
+          } else {
             console.error('❌ Invalid callback signature');
-            isValid = false;
+            console.error('  Received:', receivedChecksum);
+            console.error('  Expected:', expectedChecksum);
           }
         } catch (error) {
           console.error('❌ Signature verification error:', error);
-          isValid = false;
         }
       }
 
+      // ============================================
+      // PROCESS PAYMENT STATUS
+      // ============================================
       const status = req.body.status || req.body.paymentStatus || 'SUCCESS';
 
       if (status === 'SUCCESS' && isValid) {
-        // Payment successful
+        // ✅ Payment successful
         order.paymentStatus = 'Paid';
         order.gatewayPaymentId = req.body.paymentId || req.body.transactionId || transactionId;
         order.paymentDate = new Date();
@@ -293,19 +273,11 @@ class PaymentController {
         console.log(`✅ PhonePe payment confirmed for order: ${order.orderNumber}`);
 
         // Redirect to success page
-        if (req.body.redirectUrl || process.env.PHONEPE_REDIRECT_URL) {
-          const redirectUrl = req.body.redirectUrl || process.env.PHONEPE_REDIRECT_URL;
-          return res.redirect(`${redirectUrl}/${order._id}`);
-        }
-
-        res.json({
-          success: true,
-          message: 'Payment confirmed',
-          data: order
-        });
+        const redirectUrl = process.env.PHONEPE_REDIRECT_URL || 'https://yourdomain.com/order-success';
+        return res.redirect(`${redirectUrl}/${order._id}`);
 
       } else {
-        // Payment failed
+        // ❌ Payment failed
         order.paymentStatus = 'Failed';
         order.paymentMetadata = {
           ...order.paymentMetadata,
@@ -321,20 +293,14 @@ class PaymentController {
 
         console.log(`❌ PhonePe payment failed for order: ${order.orderNumber}`);
 
-        if (process.env.PHONEPE_FAILURE_URL) {
-          return res.redirect(`${process.env.PHONEPE_FAILURE_URL}/${order._id}`);
-        }
-
-        res.status(400).json({
-          success: false,
-          message: 'Payment failed',
-          data: order
-        });
+        // Redirect to failure page
+        const failureUrl = process.env.PHONEPE_FAILURE_URL || 'https://yourdomain.com/payment-failed';
+        return res.redirect(`${failureUrl}/${order._id}`);
       }
 
     } catch (error) {
       console.error('❌ PhonePe callback error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Error processing payment callback'
       });
@@ -342,11 +308,18 @@ class PaymentController {
   };
 
   // ============================================
-  // RAZORPAY INIT - ARROW FUNCTION ✅
+  // RAZORPAY INIT
   // ============================================
   initRazorpayPayment = async (req, res) => {
     try {
       const { orderId } = req.body;
+
+      if (!orderId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Order ID is required'
+        });
+      }
 
       const order = await Order.findById(orderId);
       if (!order) {
@@ -356,6 +329,15 @@ class PaymentController {
         });
       }
 
+      if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+        console.error('❌ Razorpay credentials missing');
+        return res.status(500).json({
+          success: false,
+          message: 'Payment gateway configuration error'
+        });
+      }
+
+      const razorpay = require('razorpay');
       const instance = new razorpay({
         key_id: process.env.RAZORPAY_KEY_ID,
         key_secret: process.env.RAZORPAY_KEY_SECRET,
@@ -383,7 +365,7 @@ class PaymentController {
       };
       await order.save();
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           razorpayOrderId: razorpayOrder.id,
@@ -396,7 +378,7 @@ class PaymentController {
 
     } catch (error) {
       console.error('❌ Razorpay init error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Failed to initialize Razorpay payment'
       });
@@ -404,7 +386,7 @@ class PaymentController {
   };
 
   // ============================================
-  // RAZORPAY VERIFY - ARROW FUNCTION ✅
+  // RAZORPAY VERIFY
   // ============================================
   verifyRazorpayPayment = async (req, res) => {
     try {
@@ -448,7 +430,7 @@ class PaymentController {
 
       await order.save();
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Payment verified successfully',
         data: order
@@ -456,7 +438,7 @@ class PaymentController {
 
     } catch (error) {
       console.error('❌ Razorpay verification error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Error verifying payment'
       });
@@ -464,7 +446,7 @@ class PaymentController {
   };
 
   // ============================================
-  // COD - ARROW FUNCTION ✅
+  // COD
   // ============================================
   handleCODPayment = async (req, res) => {
     try {
@@ -493,7 +475,7 @@ class PaymentController {
 
       await order.save();
 
-      res.json({
+      return res.json({
         success: true,
         message: 'COD order confirmed',
         data: order
@@ -501,7 +483,7 @@ class PaymentController {
 
     } catch (error) {
       console.error('❌ COD payment error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Error processing COD payment'
       });
@@ -509,7 +491,7 @@ class PaymentController {
   };
 
   // ============================================
-  // GET PAYMENT STATUS - ARROW FUNCTION ✅
+  // GET PAYMENT STATUS
   // ============================================
   getPaymentStatus = async (req, res) => {
     try {
@@ -523,7 +505,7 @@ class PaymentController {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           orderId: order._id,
@@ -539,7 +521,7 @@ class PaymentController {
 
     } catch (error) {
       console.error('❌ Payment status error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Error fetching payment status'
       });
