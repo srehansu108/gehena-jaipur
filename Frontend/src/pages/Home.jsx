@@ -3,7 +3,6 @@ import { HeroCarousel } from '../components/home/HeroCarousel';
 import { Features } from '../components/home/Features';
 import { CategoryGrid } from '../components/home/CategoryGrid';
 import { Bestsellers } from '../components/home/Bestsellers';
-import { OfferBanner } from '../components/home/OfferBanner';
 import { NewArrivals } from '../components/home/NewArrivals';
 import { BrandStory } from '../components/home/BrandStory';
 import { NewsletterSignup } from '../components/home/NewsletterSignup';
@@ -16,7 +15,6 @@ function Home() {
       <Features />
       <CategoryGrid />
       <Bestsellers />
-      <OfferBanner />
       <NewArrivals />
       <Testimonials />
       <BrandStory />

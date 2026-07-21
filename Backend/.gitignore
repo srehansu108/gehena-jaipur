@@ -38,3 +38,12 @@ coverage/
 *.db
 *.sqlite
 .docker/
+
+# Uploads
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.webp
+!uploads/.gitkeep
+!uploads/screenshots/.gitkeep

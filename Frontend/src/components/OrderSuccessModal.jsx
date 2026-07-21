@@ -1,4 +1,5 @@
-// src/components/OrderSuccessModal.jsx - UPDATED WITH NAVIGATION FIXES ✅
+// src/components/OrderSuccessModal.jsx - UPDATED WITH QR PENDING SUPPORT ✅
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -15,48 +16,58 @@ import {
   Home,
   Printer,
   Download,
-  Share2
+  Share2,
+  AlertCircle,
+  QrCode,
+  Loader
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-export default function OrderSuccessModal({ order, onClose, onViewOrder, onViewAllOrders }) {
+export default function OrderSuccessModal({ 
+  order, 
+  onClose, 
+  onViewOrder, 
+  onViewAllOrders,
+  isQRPending = false // ✅ NEW: Flag for QR pending status
+}) {
   const navigate = useNavigate();
   const [showConfetti, setShowConfetti] = useState(true);
 
   useEffect(() => {
-    // Trigger confetti animation
-    const duration = 3 * 1000;
-    const animationEnd = Date.now() + duration;
-    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+    // Only trigger confetti if not QR pending
+    if (!isQRPending) {
+      const duration = 3 * 1000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
 
-    function randomInRange(min, max) {
-      return Math.random() * (max - min) + min;
-    }
-
-    const interval = setInterval(() => {
-      const timeLeft = animationEnd - Date.now();
-
-      if (timeLeft <= 0) {
-        clearInterval(interval);
-        return;
+      function randomInRange(min, max) {
+        return Math.random() * (max - min) + min;
       }
 
-      const particleCount = 50 * (timeLeft / duration);
-      confetti({
-        ...defaults,
-        particleCount,
-        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
-      });
-      confetti({
-        ...defaults,
-        particleCount,
-        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
-      });
-    }, 250);
+      const interval = setInterval(() => {
+        const timeLeft = animationEnd - Date.now();
 
-    // Cleanup
-    return () => clearInterval(interval);
-  }, []);
+        if (timeLeft <= 0) {
+          clearInterval(interval);
+          return;
+        }
+
+        const particleCount = 50 * (timeLeft / duration);
+        confetti({
+          ...defaults,
+          particleCount,
+          origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+        });
+        confetti({
+          ...defaults,
+          particleCount,
+          origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+        });
+      }, 250);
+
+      return () => clearInterval(interval);
+    }
+  }, [isQRPending]);
 
   const formatCurrency = (amount) => {
     return '₹' + (amount || 0).toLocaleString('en-IN');
@@ -88,7 +99,6 @@ export default function OrderSuccessModal({ order, onClose, onViewOrder, onViewA
   };
 
   const handleDownloadInvoice = () => {
-    // You can implement PDF download here
     alert('Invoice download feature coming soon!');
   };
 
@@ -104,12 +114,8 @@ export default function OrderSuccessModal({ order, onClose, onViewOrder, onViewA
     }
   };
 
-  // ✅ NEW: Handle View Order Details with navigation to AccountPage
   const handleViewOrder = () => {
-    // Close the modal
     if (onClose) onClose();
-    
-    // Navigate to account page with order ID in state
     navigate('/account', { 
       state: { 
         selectedOrderId: order._id,
@@ -118,12 +124,8 @@ export default function OrderSuccessModal({ order, onClose, onViewOrder, onViewA
     });
   };
 
-  // ✅ NEW: Handle View All Orders with navigation to AccountPage
   const handleViewAllOrders = () => {
-    // Close the modal
     if (onClose) onClose();
-    
-    // Navigate to account page with orders tab active
     navigate('/account', { 
       state: { 
         activeTab: 'orders'
@@ -131,12 +133,106 @@ export default function OrderSuccessModal({ order, onClose, onViewOrder, onViewA
     });
   };
 
-  // ✅ NEW: Handle Close with navigation to products
   const handleClose = () => {
     if (onClose) onClose();
     navigate('/products');
   };
 
+  // ============================================
+  // QR PENDING STATE - SHOW DIFFERENT UI
+  // ============================================
+  if (isQRPending) {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-fadeIn">
+          {/* Header - Different for QR Pending */}
+          <div className="relative bg-gradient-to-r from-yellow-500 to-amber-600 p-6 rounded-t-2xl">
+            <button 
+              onClick={handleClose}
+              className="absolute right-4 top-4 text-white/80 hover:text-white transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-white/20 rounded-full mb-4">
+                <QrCode className="w-12 h-12 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-white">Payment Under Review</h2>
+              <p className="text-yellow-100 mt-1">Your QR payment details have been submitted</p>
+            </div>
+          </div>
+
+          <div className="p-6">
+            {/* Order Number */}
+            <div className="bg-gray-50 rounded-xl p-4 mb-6 text-center">
+              <p className="text-sm text-gray-500">Order Number</p>
+              <p className="text-2xl font-bold text-pink-600">{order.orderNumber}</p>
+              <p className="text-xs text-gray-400 mt-1">Placed on {formatDate(order.createdAt)}</p>
+            </div>
+
+            {/* Pending Status Message */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 mb-6">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-1">
+                  <AlertCircle className="w-6 h-6 text-yellow-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-yellow-800">Payment Verification Pending</h3>
+                  <p className="text-sm text-yellow-700 mt-1">
+                    Your QR payment details have been submitted successfully. 
+                    Our admin team will verify the transaction and update your order status.
+                  </p>
+                  <div className="mt-3 flex items-center gap-2 text-sm text-yellow-700">
+                    <Loader className="w-4 h-4 animate-spin" />
+                    <span>Verification typically takes 1-2 business hours</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Order Summary - Simplified */}
+            <div className="bg-gray-50 rounded-xl p-4 mb-6">
+              <h4 className="font-semibold text-gray-700 mb-2">Order Summary</h4>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Total Amount</span>
+                <span className="font-bold text-pink-600">{formatCurrency(order.total)}</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Payment: {order.paymentMethod || 'QR'}</p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={handleViewOrder}
+                className="flex-1 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Track Order Status
+              </button>
+              <button
+                onClick={handleViewAllOrders}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+              >
+                <Home className="w-4 h-4" />
+                All Orders
+              </button>
+            </div>
+
+            {/* Notification */}
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg flex items-center gap-2 text-blue-700 text-sm">
+              <Mail className="w-4 h-4 flex-shrink-0" />
+              <span>You'll receive a confirmation email once your payment is verified.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================
+  // SUCCESS STATE - Original UI
+  // ============================================
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto animate-fadeIn">
@@ -158,7 +254,7 @@ export default function OrderSuccessModal({ order, onClose, onViewOrder, onViewA
           </div>
         </div>
 
-        {/* Content */}
+        {/* Content - Original Success UI */}
         <div className="p-6">
           {/* Order Number */}
           <div className="bg-gray-50 rounded-xl p-4 mb-6 text-center">

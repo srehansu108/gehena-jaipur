@@ -1,4 +1,5 @@
 // src/app.js
+
 const express = require('express');
 const cors = require('cors');
 const compression = require('compression');
@@ -11,12 +12,13 @@ const connectDB = require('./config/database');
 const productRoutes = require('./routes/productRoutes');
 const authRoutes = require('./routes/authRoutes');
 const cartRoutes = require('./routes/cartRoutes');
-const metaRoutes = require('./routes/metaRoutes'); // ✅ ADD THIS
+const metaRoutes = require('./routes/metaRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const cacheService = require('./services/cacheService');
 const wishlistRoutes = require('./routes/wishlistRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const orderRoutes = require('./routes/orderRoutes');
+const paymentRoutes = require('./routes/paymentRoutes'); // ✅ ADD THIS
 
 const app = express();
 
@@ -104,6 +106,7 @@ app.use('/api/meta', metaRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/orders/payments', paymentRoutes); // ✅ ADD THIS - Mount payment routes under /api/orders/payments
 
 // 404 handler
 app.use((req, res) => {

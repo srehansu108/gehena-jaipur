@@ -89,7 +89,7 @@ export function Footer() {
   ];
 
   return (
-    <footer className="relative mt-20">
+    <footer>
       {/* ===== SCROLL TO TOP BUTTON ===== */}
       {showScrollTop && (
         <button
@@ -100,52 +100,6 @@ export function Footer() {
           <ArrowUp className="w-6 h-6" />
         </button>
       )}
-
-      {/* ===== NEWSLETTER SECTION ===== */}
-      <div className="relative bg-gradient-to-r from-pink-50 via-rose-50 to-pink-50 border-y border-pink-100 py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto text-center">
-            {/* Decorative elements */}
-            <div className="flex justify-center gap-3 mb-4">
-              <Sparkles className="w-5 h-5 text-pink-400 animate-float" />
-              <Heart className="w-5 h-5 text-pink-500 animate-float" style={{ animationDelay: '0.5s' }} />
-              <Sparkles className="w-5 h-5 text-pink-400 animate-float" style={{ animationDelay: '1s' }} />
-            </div>
-            
-            <h3 className="text-2xl md:text-3xl font-serif text-gray-800 mb-2">
-              Subscribe to Our <span className="text-pink-gradient">Newsletter</span>
-            </h3>
-            <p className="text-gray-600 mb-6 max-w-md mx-auto">
-              Get the latest updates on new arrivals, exclusive offers, and jewelry care tips! 🌸
-            </p>
-            
-            <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3 max-w-lg mx-auto">
-              <div className="flex-1 relative">
-                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-pink-400" />
-                <input
-                  type="email"
-                  placeholder="Enter your email address"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full pl-12 pr-4 py-3 bg-white border-2 border-pink-200 rounded-xl focus:border-pink-500 focus:ring-2 focus:ring-pink-200 transition-all outline-none"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isSubscribing}
-                className="px-8 py-3 bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold rounded-xl hover:from-pink-600 hover:to-rose-600 transition-all duration-300 shadow-md hover:shadow-pink-lg disabled:opacity-70"
-              >
-                {isSubscribing ? 'Subscribing...' : 'Subscribe'}
-              </button>
-            </form>
-            
-            <p className="text-xs text-gray-400 mt-3">
-              By subscribing, you agree to our Privacy Policy and consent to receive updates.
-            </p>
-          </div>
-        </div>
-      </div>
 
       {/* ===== MAIN FOOTER ===== */}
       <div className="bg-white border-t border-pink-100 pt-12 pb-6">
@@ -292,7 +246,7 @@ export function Footer() {
                 <div className="flex items-center gap-3">
                   <Phone className="w-4 h-4 text-pink-500 flex-shrink-0" />
                   <a href="tel:+911234567890" className="text-gray-600 hover:text-pink-500 transition-colors">
-                    +91 123 456 7890
+                    +91 91458 42500
                   </a>
                 </div>
                 <div className="flex items-center gap-3">

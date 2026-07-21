@@ -1,4 +1,4 @@
-// src/pages/Checkout.jsx - COMPLETE WITH TOKEN FIX ✅
+// src/pages/Checkout.jsx - COMPLETE WITH QR CODE SUPPORT & VERIFICATION FORM ✅
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -154,6 +154,26 @@ export default function Checkout() {
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [paymentMode, setPaymentMode] = useState(null);
   
+  // QR Code States
+  const [qrCodeImage, setQrCodeImage] = useState(null);
+  const [upiId, setUpiId] = useState('jewellery@phonepe');
+  const [qrProcessing, setQrProcessing] = useState(false);
+  const [qrOrderId, setQrOrderId] = useState(null);
+  
+  // QR Verification Form States
+  const [showVerificationForm, setShowVerificationForm] = useState(false);
+  const [verificationData, setVerificationData] = useState({
+    transactionId: '',
+    upiReferenceNumber: '',
+    paymentDate: '',
+    paymentTime: '',
+    amount: '',
+    bankName: ''
+  });
+  const [screenshotFile, setScreenshotFile] = useState(null);
+  const [screenshotPreview, setScreenshotPreview] = useState(null);
+  const [isSubmittingVerification, setIsSubmittingVerification] = useState(false);
+  
   const [touchedFields, setTouchedFields] = useState({});
   
   const [formData, setFormData] = useState({
@@ -206,6 +226,18 @@ export default function Checkout() {
     return true;
   };
 
+  // Validation for verification form
+  const validateVerificationForm = () => {
+    const { transactionId, upiReferenceNumber, paymentDate, paymentTime, amount } = verificationData;
+    if (!transactionId.trim()) return 'Transaction ID is required';
+    if (!upiReferenceNumber.trim()) return 'UPI Reference Number is required';
+    if (!paymentDate) return 'Payment date is required';
+    if (!paymentTime) return 'Payment time is required';
+    if (!amount || parseFloat(amount) <= 0) return 'Valid amount is required';
+    if (!screenshotFile) return 'Payment screenshot is required';
+    return null;
+  };
+
   useEffect(() => {
     console.log('📍 Checkout page mounted');
   }, []);
@@ -244,6 +276,99 @@ export default function Checkout() {
     const { name } = e.target;
     setTouchedFields(prev => ({ ...prev, [name]: true }));
   };
+
+  // Handle verification form input changes
+  const handleVerificationInputChange = (e) => {
+    const { name, value } = e.target;
+    setVerificationData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Handle screenshot upload
+  const handleScreenshotUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        toast.error('Please upload a valid image (JPEG, PNG, or WEBP)');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File size should be less than 5MB');
+        return;
+      }
+      
+      setScreenshotFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setScreenshotPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // src/pages/Checkout.jsx - Update the verification submission
+
+// Update handleVerificationSubmit function
+const handleVerificationSubmit = async () => {
+  const error = validateVerificationForm();
+  if (error) {
+    toast.error(error);
+    return;
+  }
+
+  setIsSubmittingVerification(true);
+  toast.loading('Submitting payment details for verification...', { duration: 3000 });
+
+  try {
+    // Create form data for API request
+    const formData = new FormData();
+    formData.append('transactionId', verificationData.transactionId);
+    formData.append('upiReferenceNumber', verificationData.upiReferenceNumber);
+    formData.append('paymentDate', verificationData.paymentDate);
+    formData.append('paymentTime', verificationData.paymentTime);
+    formData.append('amount', verificationData.amount);
+    formData.append('bankName', verificationData.bankName);
+    formData.append('orderId', qrOrderId || createdOrder?._id);
+    if (screenshotFile) {
+      formData.append('screenshot', screenshotFile);
+    }
+
+    // Call the verification API - this will submit for admin review
+    const response = await paymentService.verifyQRPayment(formData);
+    
+    toast.dismiss();
+
+    if (response.success) {
+      toast.success('Payment details submitted! Waiting for admin verification. 📋');
+      
+      // Close QR modal and show pending state
+      setShowQRCode(false);
+      setShowVerificationForm(false);
+      
+      // Update order status to show pending verification
+      const orderResponse = await checkoutService.getOrderById(qrOrderId || createdOrder?._id);
+      if (orderResponse.success) {
+        // Show a pending verification message instead of completing order
+        setCreatedOrder({
+          ...orderResponse.data,
+          paymentStatus: 'Pending Verification'
+        });
+        setOrderComplete(true);
+      }
+    } else {
+      toast.error(response.message || 'Submission failed. Please try again.');
+    }
+  } catch (error) {
+    console.error('❌ Verification error:', error);
+    toast.dismiss();
+    toast.error(error.message || 'Failed to submit payment details');
+  } finally {
+    setIsSubmittingVerification(false);
+  }
+};
 
   // ========== CALCULATE TOTALS WITH TAX LOGIC ==========
   const calculateTotals = () => {
@@ -284,6 +409,7 @@ export default function Checkout() {
       metal: item.metal || '',
       category: item.category || '',
       image: item.image || item.imageUrl || '',
+      sku: item.sku || '',
     }));
   };
 
@@ -293,7 +419,7 @@ export default function Checkout() {
       'phonepe': 'PhonePe',
       'razorpay': 'Razorpay',
       'paypal': 'PayPal',
-      'qr': 'QR Code',
+      'qr': 'QR',
       'cod': 'COD'
     };
     return mapping[method] || method;
@@ -308,25 +434,142 @@ export default function Checkout() {
     return mapping[method] || method;
   };
 
-  // ========== PAYMENT HANDLERS ==========
-  const handleQRPayment = () => {
-    setShowQRCode(true);
-    setPaymentMode('qr');
+  // ========== QR CODE PAYMENT HANDLERS ==========
+  
+  // Initialize QR Payment
+  const initializeQRPayment = async (order) => {
+    try {
+      toast.loading('Generating QR Code...', { duration: 2000 });
+      
+      const qrResponse = await paymentService.initQRPayment(order._id);
+      console.log('📦 QR Response:', qrResponse);
+      
+      toast.dismiss();
+      
+      if (qrResponse.success) {
+        setQrCodeImage(qrResponse.data.qrCodeUrl);
+        setUpiId(qrResponse.data.upiId || 'jewellery@phonepe');
+        setQrOrderId(order._id);
+        setShowQRCode(true);
+        setPaymentMode('qr');
+        setLoading(false);
+        toast.success('Scan QR code to complete payment');
+      } else {
+        toast.error(qrResponse.message || 'Failed to generate QR code');
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('❌ QR Payment error:', error);
+      toast.dismiss();
+      toast.error('Failed to initiate QR payment');
+      setLoading(false);
+    }
   };
 
-  // ========== ✅ PHONEPE PAYMENT HANDLER (Testing + Production) ==========
+  // Handle QR payment flow
+  const handlePlaceOrderWithQR = async () => {
+    // Validate all fields
+    const requiredFields = ['fullName', 'email', 'phone', 'addressLine1', 'city', 'state', 'postalCode'];
+    let hasError = false;
+    
+    const allTouched = {};
+    requiredFields.forEach(field => {
+      allTouched[field] = true;
+    });
+    setTouchedFields(allTouched);
+    
+    for (const field of requiredFields) {
+      const error = validateField(field, formData[field]);
+      if (error) {
+        hasError = true;
+        toast.error(error);
+        const element = document.querySelector(`[name="${field}"]`);
+        if (element) {
+          element.focus();
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        break;
+      }
+    }
+    
+    if (hasError) return;
+
+    setLoading(true);
+    setOrderError(null);
+
+    try {
+      checkoutService.setToken(token);
+      paymentService.setToken(token);
+      
+      const { subtotal, shippingCost, tax, taxBreakdown, discount, total } = calculateTotals();
+      const orderItems = getOrderItems();
+
+      const orderData = {
+        items: orderItems,
+        subtotal: subtotal,
+        discount: discount,
+        tax: tax,
+        taxBreakdown: taxBreakdown,
+        shippingCharges: shippingCost,
+        total: total,
+        shippingAddress: {
+          fullName: formData.fullName,
+          addressLine1: formData.addressLine1,
+          addressLine2: formData.addressLine2 || '',
+          city: formData.city,
+          state: formData.state,
+          postalCode: formData.postalCode,
+          country: formData.country,
+          phoneNumber: formData.phone,
+          email: formData.email
+        },
+        paymentMethod: 'QR',
+        paymentDetails: {
+          transactionId: `QR-${Date.now()}`,
+          paymentMethod: 'qr'
+        },
+        shippingMethod: getShippingMethodValue(selectedShipping),
+        customerNote: formData.customerNote || '',
+        couponCode: ''
+      };
+
+      console.log('📦 Order data being sent:', JSON.stringify(orderData, null, 2));
+
+      const response = await checkoutService.createOrder(orderData);
+      console.log('📦 Order response:', response);
+
+      if (response.success && response.data) {
+        console.log('✅ Order created successfully');
+        setCreatedOrder(response.data);
+        await initializeQRPayment(response.data);
+      } else {
+        toast.error(response.message || 'Failed to place order. Please try again.');
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('❌ Error placing order:', error);
+      toast.error(error.message || 'Failed to place order.');
+      setLoading(false);
+    }
+  };
+
+  // Handle QR payment complete - now shows verification form
+  const handleQRPaymentComplete = async () => {
+    // Show verification form instead of auto-verification
+    setShowVerificationForm(true);
+  };
+
+  // ========== ✅ PHONEPE PAYMENT HANDLER ==========
   const handlePhonePePayment = async (orderData) => {
     console.log('📱 Initiating PhonePe payment...', orderData);
     console.log('📦 Order ID:', orderData._id);
     
-    // ✅ Ensure token is set
     paymentService.setToken(token);
     
     try {
       setLoading(true);
       toast.loading('Initializing PhonePe...', { duration: 3000 });
       
-      // ✅ 1. Call backend to initialize PhonePe
       console.log('📤 Calling initPhonePe with orderId:', orderData._id);
       
       const initResponse = await paymentService.initPhonePe(orderData._id);
@@ -347,31 +590,17 @@ export default function Checkout() {
       console.log('✅ Amount:', amount);
       console.log('✅ Mode:', mode);
 
-      // ✅ 2. Check if it's production or testing
       if (mode === 'production') {
-        // 🚀 PRODUCTION: Redirect to PhonePe
         toast.loading('Redirecting to PhonePe...', { duration: 3000 });
-        
-        // Open in new tab (or redirect)
         window.open(paymentUrl, '_blank');
-        
         toast.success('PhonePe payment initiated! Please complete payment on PhonePe page.');
         setLoading(false);
-        
-        // ✅ Start polling for payment status
         startPaymentPolling(orderData._id, transactionId);
-        
       } else {
-        // 🧪 TESTING: Show mock payment page - FIXED: Changed toast.info to toast.loading
         toast.loading('Testing Mode: Opening mock payment...', { duration: 2000 });
-        
-        // Open mock payment page in new tab
         window.open(paymentUrl, '_blank');
-        
         toast.success('Mock PhonePe payment initiated!');
         setLoading(false);
-        
-        // ✅ Start polling for payment status
         startPaymentPolling(orderData._id, transactionId);
       }
       
@@ -383,12 +612,12 @@ export default function Checkout() {
     }
   };
 
-  // ========== ✅ PAYMENT STATUS POLLING (FIXED) ==========
+  // ========== ✅ PAYMENT STATUS POLLING ==========
   const startPaymentPolling = (orderId, transactionId) => {
     console.log('🔄 Starting payment status polling...');
     
     let attempts = 0;
-    const maxAttempts = 30; // 30 * 5 seconds = 2.5 minutes
+    const maxAttempts = 30;
     const pollInterval = setInterval(async () => {
       attempts++;
       console.log(`🔄 Checking payment status (attempt ${attempts}/${maxAttempts})...`);
@@ -400,11 +629,9 @@ export default function Checkout() {
         if (statusResponse.success && statusResponse.data.paymentStatus === 'Paid') {
           console.log('✅ Payment confirmed!');
           clearInterval(pollInterval);
-          
           toast.dismiss();
           toast.success('Payment confirmed! 🎉');
           
-          // Get order details
           const orderResponse = await checkoutService.getOrderById(orderId);
           if (orderResponse.success) {
             handlePaymentSuccess({
@@ -441,19 +668,16 @@ export default function Checkout() {
       }
     }, 5000);
     
-    // Return cleanup function
     return () => clearInterval(pollInterval);
   };
 
-  // ✅ REAL RAZORPAY IMPLEMENTATION
+  // ✅ RAZORPAY IMPLEMENTATION
   const handleRazorpayPayment = async (orderData) => {
     console.log('💳 Initiating REAL Razorpay payment...', orderData);
     console.log('📦 Order ID:', orderData._id);
     
-    // ✅ Ensure token is set on paymentService
     paymentService.setToken(token);
     
-    // ✅ Check if Razorpay SDK is loaded
     if (typeof window.Razorpay === 'undefined') {
       console.error('❌ Razorpay SDK not loaded!');
       toast.error('Razorpay SDK not loaded. Please refresh the page.');
@@ -465,7 +689,6 @@ export default function Checkout() {
     try {
       setLoading(true);
       
-      // ✅ 1. Call backend to initialize Razorpay
       console.log('📤 Calling initRazorpay with orderId:', orderData._id);
       
       const initResponse = await paymentService.initRazorpay(orderData._id);
@@ -482,7 +705,6 @@ export default function Checkout() {
       console.log('✅ Razorpay Order ID:', razorpayOrderId);
       console.log('✅ Amount:', amount, currency);
 
-      // ✅ 2. Open Razorpay Checkout
       const options = {
         key: keyId,
         amount: amount,
@@ -501,7 +723,6 @@ export default function Checkout() {
         handler: async (response) => {
           console.log('✅ Razorpay success response:', response);
           
-          // ✅ 3. Verify payment on backend
           try {
             const verifyResponse = await paymentService.verifyRazorpay({
               razorpay_order_id: response.razorpay_order_id,
@@ -513,7 +734,6 @@ export default function Checkout() {
             console.log('📦 Verify Response:', verifyResponse);
 
             if (verifyResponse.success) {
-              // ✅ 4. Handle successful payment
               handlePaymentSuccess({
                 paymentId: response.razorpay_payment_id,
                 signature: response.razorpay_signature,
@@ -539,7 +759,6 @@ export default function Checkout() {
         }
       };
 
-      // ✅ 5. Open Razorpay
       const razorpayInstance = new window.Razorpay(options);
       razorpayInstance.open();
 
@@ -635,6 +854,7 @@ export default function Checkout() {
     console.log('✅ Payment successful:', paymentData);
     setPaymentProcessing(true);
     setShowQRCode(false);
+    setShowVerificationForm(false);
     
     try {
       let existingOrders = [];
@@ -717,7 +937,20 @@ export default function Checkout() {
 
   const handlePaymentCancel = () => {
     setShowQRCode(false);
+    setShowVerificationForm(false);
     setPaymentMode(null);
+    setQrCodeImage(null);
+    setQrProcessing(false);
+    setScreenshotFile(null);
+    setScreenshotPreview(null);
+    setVerificationData({
+      transactionId: '',
+      upiReferenceNumber: '',
+      paymentDate: '',
+      paymentTime: '',
+      amount: '',
+      bankName: ''
+    });
     toast('Payment cancelled. You can try again.', { duration: 3000 });
   };
 
@@ -755,7 +988,7 @@ export default function Checkout() {
     }
 
     if (selectedPayment === 'qr') {
-      handleQRPayment();
+      handlePlaceOrderWithQR();
       return;
     }
 
@@ -763,7 +996,6 @@ export default function Checkout() {
     setOrderError(null);
 
     try {
-      // ✅ CRITICAL: Set token on BOTH services
       checkoutService.setToken(token);
       paymentService.setToken(token);
       
@@ -928,50 +1160,289 @@ export default function Checkout() {
           ))}
         </div>
 
-        {/* QR Code Modal */}
+        {/* QR Code Modal with Verification Form */}
         {showQRCode && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
               <div className="text-center">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-bold text-gray-900">Scan to Pay</h3>
+                <div className="flex justify-between items-center mb-4 sticky top-0 bg-white z-10 pb-2">
+                  <h3 className="text-xl font-bold text-gray-900">
+                    {showVerificationForm ? 'Verify Payment' : 'Scan to Pay'}
+                  </h3>
                   <button 
-                    onClick={handlePaymentCancel}
+                    onClick={() => {
+                      if (showVerificationForm) {
+                        setShowVerificationForm(false);
+                        setScreenshotFile(null);
+                        setScreenshotPreview(null);
+                      } else {
+                        handlePaymentCancel();
+                      }
+                    }}
                     className="text-gray-400 hover:text-gray-600"
                   >
                     ✕
                   </button>
                 </div>
                 
-                <div className="bg-gray-50 p-8 rounded-xl mb-4">
-                  <div className="w-48 h-48 mx-auto bg-white border-2 border-gray-200 rounded-lg flex items-center justify-center">
-                    <QrCode className="w-32 h-32 text-gray-400" />
-                  </div>
-                  <p className="text-sm text-gray-500 mt-2">Scan with any UPI app</p>
-                </div>
+                {!showVerificationForm ? (
+                  // QR Code Display
+                  <>
+                    <div className="bg-gray-50 p-6 rounded-xl mb-4">
+                      <div className="w-56 h-56 mx-auto bg-white border-2 border-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
+                        {qrCodeImage ? (
+                          <img 
+                            src={qrCodeImage} 
+                            alt="UPI QR Code - Scan to Pay" 
+                            className="w-full h-full object-contain p-2"
+                            onError={(e) => {
+                              console.error('QR Image failed to load');
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="text-center">
+                            <Loader className="w-12 h-12 animate-spin text-pink-600 mx-auto" />
+                            <p className="text-sm text-gray-500 mt-2">Generating QR Code...</p>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500 mt-2">Scan with any UPI app</p>
+                    </div>
 
-                <div className="space-y-2 text-sm text-gray-600">
-                  <p><span className="font-medium">Amount:</span> ₹{total.toLocaleString('en-IN')}</p>
-                  <p><span className="font-medium">UPI ID:</span> jewellery@phonepe</p>
-                  <p className="text-xs text-gray-400">Accepted: Google Pay, PhonePe, Paytm & all UPI apps</p>
-                </div>
+                    {/* Payment Details */}
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <p>
+                        <span className="font-medium">Amount:</span> 
+                        ₹{total.toLocaleString('en-IN')}
+                      </p>
+                      <p>
+                        <span className="font-medium">UPI ID:</span> 
+                        {upiId || 'jewellery@phonepe'}
+                      </p>
+                      <div className="flex flex-wrap justify-center gap-2 mt-2">
+                        <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">Google Pay</span>
+                        <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">PhonePe</span>
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">Paytm</span>
+                        <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">BHIM</span>
+                      </div>
+                    </div>
 
-                <button
-                  onClick={() => {
-                    toast.loading('Verifying payment...', { duration: 2000 });
-                    setTimeout(() => {
-                      toast.dismiss();
-                      handlePaymentSuccess({
-                        paymentId: `QR-${Date.now()}`,
-                        signature: 'qr_signature_' + Date.now()
-                      });
-                    }, 2000);
-                  }}
-                  className="w-full mt-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-lg font-semibold hover:from-green-600 hover:to-emerald-700 transition-all"
-                >
-                  I've Completed Payment
-                </button>
-                <p className="text-xs text-gray-400 mt-2">Click after scanning and paying</p>
+                    {/* Action Buttons */}
+                    <div className="mt-4 space-y-2">
+                      <button
+                        onClick={handleQRPaymentComplete}
+                        disabled={qrProcessing || !qrCodeImage}
+                        className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-lg font-semibold hover:from-green-600 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {qrProcessing ? (
+                          <>
+                            <Loader className="w-5 h-5 animate-spin inline mr-2" />
+                            Verifying Payment...
+                          </>
+                        ) : (
+                          "I've Completed Payment"
+                        )}
+                      </button>
+                      
+                      <button
+                        onClick={handlePaymentCancel}
+                        className="w-full text-gray-500 py-2 rounded-lg hover:bg-gray-100 transition-colors text-sm"
+                      >
+                        Cancel Payment
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  // Verification Form
+                  <>
+                    <div className="text-left space-y-4">
+                      <p className="text-sm text-gray-600 mb-4">
+                        Please provide your payment details to verify the transaction.
+                      </p>
+
+                      {/* Screenshot Upload */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Payment Screenshot <span className="text-red-500">*</span>
+                        </label>
+                        <div className="flex flex-col items-center justify-center w-full">
+                          {screenshotPreview ? (
+                            <div className="relative w-full">
+                              <img 
+                                src={screenshotPreview} 
+                                alt="Payment Screenshot" 
+                                className="w-full max-h-48 object-contain rounded-lg border border-gray-200"
+                              />
+                              <button
+                                onClick={() => {
+                                  setScreenshotFile(null);
+                                  setScreenshotPreview(null);
+                                }}
+                                className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="w-full h-32 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-green-500 transition-colors">
+                              <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-sm text-gray-500">Click to upload screenshot</span>
+                              <span className="text-xs text-gray-400">PNG, JPG or WEBP (Max 5MB)</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleScreenshotUpload}
+                                className="hidden"
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Transaction ID */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Transaction ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="transactionId"
+                          value={verificationData.transactionId}
+                          onChange={handleVerificationInputChange}
+                          placeholder="e.g., TXN123456789"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          required
+                        />
+                      </div>
+
+                      {/* UPI Reference Number */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          UPI Reference Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="upiReferenceNumber"
+                          value={verificationData.upiReferenceNumber}
+                          onChange={handleVerificationInputChange}
+                          placeholder="e.g., 9123456789"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          required
+                        />
+                      </div>
+
+                      {/* Payment Date & Time */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Payment Date <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="date"
+                            name="paymentDate"
+                            value={verificationData.paymentDate}
+                            onChange={handleVerificationInputChange}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Payment Time <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="time"
+                            name="paymentTime"
+                            value={verificationData.paymentTime}
+                            onChange={handleVerificationInputChange}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      {/* Amount */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Amount Paid <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2 text-gray-500">₹</span>
+                          <input
+                            type="number"
+                            name="amount"
+                            value={verificationData.amount}
+                            onChange={handleVerificationInputChange}
+                            placeholder="Enter amount"
+                            className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            required
+                            min="1"
+                            step="1"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Bank Name (Optional) */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Bank Name (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          name="bankName"
+                          value={verificationData.bankName}
+                          onChange={handleVerificationInputChange}
+                          placeholder="e.g., State Bank of India"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Verification Action Buttons */}
+                    <div className="mt-6 space-y-2">
+                      <button
+                        onClick={handleVerificationSubmit}
+                        disabled={isSubmittingVerification}
+                        className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isSubmittingVerification ? (
+                          <>
+                            <Loader className="w-5 h-5 animate-spin inline mr-2" />
+                            Submitting Verification...
+                          </>
+                        ) : (
+                          "Submit for Verification"
+                        )}
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setShowVerificationForm(false);
+                          setScreenshotFile(null);
+                          setScreenshotPreview(null);
+                          setVerificationData({
+                            transactionId: '',
+                            upiReferenceNumber: '',
+                            paymentDate: '',
+                            paymentTime: '',
+                            amount: '',
+                            bankName: ''
+                          });
+                        }}
+                        className="w-full text-gray-500 py-2 rounded-lg hover:bg-gray-100 transition-colors text-sm"
+                      >
+                        ← Back to QR Code
+                      </button>
+                    </div>
+                  </>
+                )}
+                
+                <p className="text-xs text-gray-400 mt-2">
+                  ⚠️ Do not close this window until payment is confirmed
+                </p>
               </div>
             </div>
           </div>

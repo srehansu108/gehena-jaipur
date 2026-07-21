@@ -1,9 +1,11 @@
 // backend/controllers/paymentController.js
-// COMPLETE PRODUCTION-READY PAYMENT CONTROLLER
+// COMPLETE PRODUCTION-READY PAYMENT CONTROLLER WITH QR CODE & FILE UPLOAD SUPPORT ✅
 
 const Order = require('../models/Order');
 const crypto = require('crypto');
 const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
 
 class PaymentController {
   // ============================================
@@ -160,13 +162,11 @@ class PaymentController {
           console.log(`❌ ${endpoint.name} API failed:`, error.response?.status);
           console.log('   Response:', error.response?.data);
           
-          // If we get a 400 with a specific message, try the next
           if (error.response?.status === 400 && error.response?.data?.message?.includes('Mapping')) {
             console.log('⚠️ API Mapping error, trying next endpoint...');
             continue;
           }
           
-          // Store the last response for error handling
           if (error.response) {
             response = error.response;
             usedEndpoint = endpoint.url;
@@ -197,7 +197,6 @@ class PaymentController {
         throw new Error('No payment URL received from PhonePe');
       }
 
-      // Update order with payment URL
       order.paymentMetadata = {
         ...order.paymentMetadata,
         phonepePaymentUrl: paymentUrl,
@@ -253,7 +252,6 @@ class PaymentController {
 
       const { transactionId, orderId, status, paymentId } = req.body;
 
-      // Find order
       let order;
       if (transactionId) {
         order = await Order.findOne({ gatewayOrderId: transactionId });
@@ -271,9 +269,6 @@ class PaymentController {
 
       console.log(`✅ Order found: ${order.orderNumber}`);
 
-      // ============================================
-      // VERIFY CALLBACK SIGNATURE
-      // ============================================
       let isValid = false;
       const apiKey = process.env.PHONEPE_API_KEY;
 
@@ -297,13 +292,9 @@ class PaymentController {
         }
       }
 
-      // ============================================
-      // PROCESS PAYMENT STATUS
-      // ============================================
       const paymentStatus = status || req.body.paymentStatus || 'SUCCESS';
 
       if (paymentStatus === 'SUCCESS') {
-        // ✅ Payment successful
         order.paymentStatus = 'Paid';
         order.gatewayPaymentId = paymentId || req.body.transactionId || transactionId;
         order.paymentDate = new Date();
@@ -335,7 +326,6 @@ class PaymentController {
         return res.redirect(`${frontendUrl}/order-success/${order._id}`);
 
       } else {
-        // ❌ Payment failed
         order.paymentStatus = 'Failed';
         order.paymentMetadata = {
           ...order.paymentMetadata,
@@ -391,7 +381,6 @@ class PaymentController {
 
       console.log('✅ Order found:', order.orderNumber, 'Total:', order.total);
 
-      // Validate Razorpay credentials
       if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
         console.error('❌ Razorpay credentials missing');
         return res.status(500).json({
@@ -423,7 +412,6 @@ class PaymentController {
 
       console.log('✅ Razorpay Order Created:', razorpayOrder.id);
 
-      // Store gateway info
       order.gatewayOrderId = razorpayOrder.id;
       order.paymentGateway = 'razorpay';
       order.paymentStatus = 'Initiated';
@@ -467,7 +455,6 @@ class PaymentController {
 
       const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderId } = req.body;
 
-      // Validate required fields
       if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !orderId) {
         return res.status(400).json({
           success: false,
@@ -475,7 +462,6 @@ class PaymentController {
         });
       }
 
-      // Verify signature
       const body = razorpay_order_id + '|' + razorpay_payment_id;
       const expectedSignature = crypto
         .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
@@ -500,7 +486,6 @@ class PaymentController {
         });
       }
 
-      // Update order
       order.paymentStatus = 'Paid';
       order.gatewayPaymentId = razorpay_payment_id;
       order.gatewaySignature = razorpay_signature;
@@ -546,6 +531,440 @@ class PaymentController {
   };
 
   // ============================================
+  // QR CODE PAYMENT - INIT
+  // ============================================
+  initQRPayment = async (req, res) => {
+    try {
+      console.log('📱 initQRPayment called');
+      console.log('📦 Order ID:', req.body.orderId);
+
+      const { orderId } = req.body;
+
+      if (!orderId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Order ID is required'
+        });
+      }
+
+      const order = await Order.findById(orderId);
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found'
+        });
+      }
+
+      console.log(`✅ Order found: ${order.orderNumber}`);
+
+      // Get UPI ID from env or use default
+      const upiId = process.env.UPI_ID || 'jewellery@phonepe';
+      
+      // Generate UPI QR Code data
+      const upiString = `upi://pay?pa=${upiId}&am=${order.total}&cu=INR&tn=Payment%20for%20Order%20${order.orderNumber}`;
+      
+      // Generate QR Code URL using QR Server API
+      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiString)}`;
+
+      // Update order
+      order.paymentStatus = 'Initiated';
+      order.paymentGateway = 'qr';
+      order.paymentAttempts += 1;
+      order.paymentMetadata = {
+        ...order.paymentMetadata,
+        qrPayment: {
+          upiId: upiId,
+          amount: order.total,
+          qrCodeUrl: qrCodeUrl,
+          upiString: upiString,
+          initiatedAt: new Date().toISOString()
+        }
+      };
+      await order.save();
+
+      console.log('✅ QR Code generated for order:', order.orderNumber);
+
+      return res.json({
+        success: true,
+        data: {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          amount: order.total,
+          upiId: upiId,
+          qrCodeUrl: qrCodeUrl,
+          transactionId: `QR-${Date.now()}`
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ QR Payment init error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to initialize QR payment'
+      });
+    }
+  };
+
+  // ============================================
+  // QR CODE PAYMENT - VERIFY (WITH FILE UPLOAD) ✅
+  // ============================================
+  verifyQRPayment = async (req, res) => {
+  try {
+    console.log('🔐 verifyQRPayment called - Submitting for admin review');
+    
+    // Handle file upload
+    let screenshotFile = null;
+    if (req.file) {
+      screenshotFile = req.file;
+      console.log('📸 Screenshot uploaded:', screenshotFile.filename);
+    }
+
+    const { 
+      orderId, 
+      transactionId, 
+      upiReferenceNumber, 
+      paymentDate, 
+      paymentTime, 
+      amount, 
+      bankName 
+    } = req.body;
+
+    // Validate required fields
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Order ID is required'
+      });
+    }
+
+    // Find the order
+    const Order = require('../models/Order');
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    console.log(`✅ Order found: ${order.orderNumber}`);
+
+    // Save screenshot path
+    let screenshotPath = null;
+    let screenshotUrl = null;
+    
+    if (screenshotFile) {
+      screenshotPath = screenshotFile.path;
+      screenshotUrl = `/api/orders/payments/screenshot/${screenshotFile.filename}`;
+    }
+
+    // Update order - Set to "Pending Verification" status
+    order.paymentStatus = 'Pending';
+    order.status = 'Pending';
+    order.paymentMethod = 'QR';
+    order.paymentGateway = 'qr';
+    order.transactionId = transactionId;
+    order.gatewayPaymentId = transactionId;
+
+    // Add status history
+    order.statusHistory.push({
+      status: 'Pending',
+      date: new Date(),
+      note: `📋 QR Payment details submitted for admin verification. Transaction: ${transactionId}`,
+      updatedBy: 'Customer'
+    });
+
+    // Store all verification details in metadata
+    order.paymentMetadata = {
+      ...order.paymentMetadata,
+      qrVerification: {
+        submittedAt: new Date().toISOString(),
+        transactionId: transactionId,
+        upiReferenceNumber: upiReferenceNumber,
+        paymentDate: paymentDate,
+        paymentTime: paymentTime,
+        amount: parseFloat(amount),
+        bankName: bankName || 'Not provided',
+        screenshotPath: screenshotPath,
+        screenshotUrl: screenshotUrl,
+        filename: screenshotFile ? screenshotFile.filename : null,
+        status: 'pending', // pending, approved, rejected
+        reviewedBy: null,
+        reviewedAt: null,
+        rejectionReason: null
+      }
+    };
+
+    await order.save();
+
+    console.log(`✅ QR Payment details submitted for admin review: ${order.orderNumber}`);
+
+    return res.json({
+      success: true,
+      message: 'Payment details submitted for verification. Please wait for admin approval.',
+      data: {
+        order: order,
+        verificationStatus: 'pending'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ QR Payment verification error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Error submitting payment details'
+    });
+  }
+};
+
+// ============================================
+// ADMIN: APPROVE QR PAYMENT ✅
+// ============================================
+adminVerifyQRPayment = async (req, res) => {
+  try {
+    console.log('✅ Admin approving QR payment');
+    const { orderId } = req.params;
+    const { adminNote } = req.body;
+
+    const Order = require('../models/Order');
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    console.log(`📦 Order found: ${order.orderNumber}`);
+    console.log(`📦 Current status: ${order.status}, Payment: ${order.paymentStatus}`);
+
+    // Check if it's a QR payment pending verification
+    if (order.paymentMethod !== 'QR') {
+      return res.status(400).json({
+        success: false,
+        message: 'This is not a QR payment order'
+      });
+    }
+
+    if (order.paymentStatus !== 'Pending') {
+      return res.status(400).json({
+        success: false,
+        message: `Order is not pending verification. Current status: ${order.paymentStatus}`
+      });
+    }
+
+    // Update order - Mark as Paid
+    order.paymentStatus = 'Paid';
+    order.paymentDate = new Date();
+    order.status = 'Processing';
+    order.shippingStatus = 'Processing';
+
+    // Update QR verification metadata
+    if (order.paymentMetadata?.qrVerification) {
+      order.paymentMetadata.qrVerification.status = 'approved';
+      order.paymentMetadata.qrVerification.reviewedBy = req.user?.name || 'Admin';
+      order.paymentMetadata.qrVerification.reviewedAt = new Date().toISOString();
+      order.paymentMetadata.qrVerification.adminNote = adminNote || 'Payment verified by admin';
+    }
+
+    // Add status history
+    if (!order.statusHistory) {
+      order.statusHistory = [];
+    }
+    order.statusHistory.push({
+      status: 'Processing',
+      date: new Date(),
+      note: `✅ QR Payment approved by Admin. Transaction: ${order.transactionId || 'N/A'}`,
+      updatedBy: req.user?.name || 'Admin'
+    });
+
+    await order.save();
+
+    console.log(`✅ QR Payment approved for order: ${order.orderNumber}`);
+
+    return res.json({
+      success: true,
+      message: 'QR Payment approved successfully',
+      data: order
+    });
+
+  } catch (error) {
+    console.error('❌ Error approving QR payment:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Error approving QR payment'
+    });
+  }
+};
+
+// ============================================
+// ADMIN: REJECT QR PAYMENT ✅
+// ============================================
+adminRejectQRPayment = async (req, res) => {
+  try {
+    console.log('❌ Admin rejecting QR payment');
+    const { orderId } = req.params;
+    const { reason } = req.body;
+
+    if (!reason) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rejection reason is required'
+      });
+    }
+
+    const Order = require('../models/Order');
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    console.log(`📦 Order found: ${order.orderNumber}`);
+    console.log(`📦 Current status: ${order.status}, Payment: ${order.paymentStatus}`);
+
+    // Check if it's a QR payment pending verification
+    if (order.paymentMethod !== 'QR') {
+      return res.status(400).json({
+        success: false,
+        message: 'This is not a QR payment order'
+      });
+    }
+
+    if (order.paymentStatus !== 'Pending') {
+      return res.status(400).json({
+        success: false,
+        message: `Order is not pending verification. Current status: ${order.paymentStatus}`
+      });
+    }
+
+    // Update order - Mark as Failed
+    order.paymentStatus = 'Failed';
+    order.status = 'Cancelled';
+    order.cancelledAt = new Date();
+
+    // Update QR verification metadata
+    if (order.paymentMetadata?.qrVerification) {
+      order.paymentMetadata.qrVerification.status = 'rejected';
+      order.paymentMetadata.qrVerification.reviewedBy = req.user?.name || 'Admin';
+      order.paymentMetadata.qrVerification.reviewedAt = new Date().toISOString();
+      order.paymentMetadata.qrVerification.rejectionReason = reason;
+    }
+
+    // Add status history
+    if (!order.statusHistory) {
+      order.statusHistory = [];
+    }
+    order.statusHistory.push({
+      status: 'Cancelled',
+      date: new Date(),
+      note: `❌ QR Payment rejected by Admin. Reason: ${reason}`,
+      updatedBy: req.user?.name || 'Admin'
+    });
+
+    await order.save();
+
+    console.log(`❌ QR Payment rejected for order: ${order.orderNumber}`);
+
+    return res.json({
+      success: true,
+      message: 'QR Payment rejected',
+      data: order
+    });
+
+  } catch (error) {
+    console.error('❌ Error rejecting QR payment:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Error rejecting QR payment'
+    });
+  }
+};
+// ============================================
+// ADMIN: RE-OPEN REJECTED QR PAYMENT ✅
+// ============================================
+adminReopenQRPayment = async (req, res) => {
+  try {
+    console.log('🔄 Admin re-opening QR payment');
+    const { orderId } = req.params;
+    const { adminNote } = req.body;
+
+    const Order = require('../models/Order');
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    console.log(`📦 Order found: ${order.orderNumber}`);
+    console.log(`📦 Current status: ${order.status}, Payment: ${order.paymentStatus}`);
+
+    // Check if it's a QR payment that was rejected
+    if (order.paymentMethod !== 'QR') {
+      return res.status(400).json({
+        success: false,
+        message: 'This is not a QR payment order'
+      });
+    }
+
+    if (order.paymentStatus !== 'Failed') {
+      return res.status(400).json({
+        success: false,
+        message: `Order is not in rejected state. Current status: ${order.paymentStatus}`
+      });
+    }
+
+    // Re-open the order - Set back to Pending
+    order.paymentStatus = 'Pending';
+    order.status = 'Pending';
+    order.cancelledAt = null;
+
+    // Update QR verification metadata
+    if (order.paymentMetadata?.qrVerification) {
+      order.paymentMetadata.qrVerification.status = 'pending';
+      order.paymentMetadata.qrVerification.reviewedBy = null;
+      order.paymentMetadata.qrVerification.reviewedAt = null;
+      order.paymentMetadata.qrVerification.rejectionReason = null;
+      order.paymentMetadata.qrVerification.reopenedAt = new Date().toISOString();
+      order.paymentMetadata.qrVerification.reopenedBy = req.user?.name || 'Admin';
+      order.paymentMetadata.qrVerification.adminNote = adminNote || 'Reopened for verification';
+    }
+
+    // Add status history
+    if (!order.statusHistory) {
+      order.statusHistory = [];
+    }
+    order.statusHistory.push({
+      status: 'Pending',
+      date: new Date(),
+      note: `🔄 QR Payment reopened for verification by Admin. ${adminNote || ''}`,
+      updatedBy: req.user?.name || 'Admin'
+    });
+
+    await order.save();
+
+    console.log(`🔄 QR Payment reopened for order: ${order.orderNumber}`);
+
+    return res.json({
+      success: true,
+      message: 'QR Payment reopened for verification',
+      data: order
+    });
+
+  } catch (error) {
+    console.error('❌ Error reopening QR payment:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Error reopening QR payment'
+    });
+  }
+};
+
+  // ============================================
   // COD PAYMENT
   // ============================================
   handleCODPayment = async (req, res) => {
@@ -572,7 +991,6 @@ class PaymentController {
 
       console.log(`✅ Order found: ${order.orderNumber}`);
 
-      // Update order for COD
       order.paymentStatus = 'COD';
       order.paymentGateway = 'cod';
       order.paymentDate = new Date();
@@ -691,8 +1109,8 @@ class PaymentController {
         });
       }
 
-      // Check if the user is authorized to view this order
-      if (order.userId && req.user && order.userId.toString() !== req.user._id.toString()) {
+      // Check authorization if user is logged in
+      if (req.user && order.userId && order.userId.toString() !== req.user._id.toString()) {
         return res.status(403).json({
           success: false,
           message: 'Unauthorized to view this order'

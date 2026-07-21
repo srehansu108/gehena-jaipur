@@ -1,4 +1,4 @@
-// src/services/paymentService.js - COMPLETE WITH CORRECT PATHS ✅
+// src/services/paymentService.js - COMPLETE WITH QR CODE SUPPORT ✅
 
 import axios from 'axios';
 
@@ -19,21 +19,13 @@ class PaymentService {
   }
 
   // ============================================
-  // ✅ ALIAS METHODS (Used by Checkout.jsx)
+  // RAZORPAY PAYMENT
   // ============================================
-
-  /**
-   * Init Razorpay payment - Called from Checkout.jsx
-   * ✅ FIXED: Correct path matches app.js routing
-   */
   async initRazorpay(orderId) {
     try {
       console.log('💰 initRazorpay called with orderId:', orderId);
-      
-      // ✅ CORRECT PATH: /orders/payments/razorpay/init
       const response = await this.api.post('/orders/payments/razorpay/init', { orderId });
       console.log('📦 initRazorpay response:', response.data);
-      
       return response.data;
     } catch (error) {
       console.error('❌ initRazorpay error:', error);
@@ -41,18 +33,11 @@ class PaymentService {
     }
   }
 
-  /**
-   * Verify Razorpay payment - Called from Checkout.jsx
-   * ✅ FIXED: Correct path matches app.js routing
-   */
   async verifyRazorpay(data) {
     try {
       console.log('🔐 verifyRazorpay called:', data);
-      
-      // ✅ CORRECT PATH: /orders/payments/razorpay/verify
       const response = await this.api.post('/orders/payments/razorpay/verify', data);
       console.log('📦 verifyRazorpay response:', response.data);
-      
       return response.data;
     } catch (error) {
       console.error('❌ verifyRazorpay error:', error);
@@ -60,36 +45,41 @@ class PaymentService {
     }
   }
 
-  /**
-   * Confirm COD payment - Called from Checkout.jsx
-   * ✅ FIXED: Correct path matches app.js routing
-   */
-  async confirmCOD(orderId) {
+  // ============================================
+  // QR CODE PAYMENT
+  // ============================================
+  async initQRPayment(orderId) {
     try {
-      console.log('📦 confirmCOD called with orderId:', orderId);
-      
-      // ✅ CORRECT PATH: /orders/payments/cod/confirm
-      const response = await this.api.post('/orders/payments/cod/confirm', { orderId });
-      console.log('📦 confirmCOD response:', response.data);
-      
+      console.log('📱 initQRPayment called with orderId:', orderId);
+      const response = await this.api.post('/orders/payments/qr/init', { orderId });
+      console.log('📦 initQRPayment response:', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ confirmCOD error:', error);
+      console.error('❌ initQRPayment error:', error);
       throw error;
     }
   }
 
-  /**
-   * Init PhonePe payment - Called from Checkout.jsx
-   */
+  async verifyQRPayment(data) {
+    try {
+      console.log('🔐 verifyQRPayment called:', data);
+      const response = await this.api.post('/orders/payments/qr/verify', data);
+      console.log('📦 verifyQRPayment response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ verifyQRPayment error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
+  // PHONEPE PAYMENT
+  // ============================================
   async initPhonePe(orderId) {
     try {
       console.log('📱 initPhonePe called with orderId:', orderId);
-      
-      // ✅ CORRECT PATH: /orders/payments/phonepe/init
       const response = await this.api.post('/orders/payments/phonepe/init', { orderId });
       console.log('📦 initPhonePe response:', response.data);
-      
       return response.data;
     } catch (error) {
       console.error('❌ initPhonePe error:', error);
@@ -98,14 +88,26 @@ class PaymentService {
   }
 
   // ============================================
+  // COD PAYMENT
+  // ============================================
+  async confirmCOD(orderId) {
+    try {
+      console.log('📦 confirmCOD called with orderId:', orderId);
+      const response = await this.api.post('/orders/payments/cod/confirm', { orderId });
+      console.log('📦 confirmCOD response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ confirmCOD error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
   // PAYMENT STATUS
   // ============================================
-
   async getPaymentStatus(orderId) {
     try {
       console.log('📊 Getting payment status for order:', orderId);
-      
-      // ✅ CORRECT PATH: /orders/payments/status/:orderId
       const response = await this.api.get(`/orders/payments/status/${orderId}`);
       return response.data;
     } catch (error) {
@@ -115,19 +117,15 @@ class PaymentService {
   }
 
   // ============================================
-  // RAZORPAY PAYMENT (Full Methods)
+  // LEGACY/MOCK METHODS (Keep for compatibility)
   // ============================================
-
   async initializeRazorpay(paymentData) {
     try {
       console.log('💰 Initializing Razorpay payment:', paymentData);
-
       const response = await this.api.post('/orders/payments/razorpay/init', paymentData);
-
       if (!response.data || !response.data.success) {
         return this.createMockRazorpayOrder(paymentData);
       }
-
       return response.data;
     } catch (error) {
       console.error('Razorpay initialization error:', error);
@@ -138,7 +136,6 @@ class PaymentService {
   createMockRazorpayOrder(paymentData) {
     const amount = Math.round(paymentData.amount * 100);
     const orderId = 'order_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-
     return {
       success: true,
       data: {
@@ -181,20 +178,13 @@ class PaymentService {
     }
   }
 
-  // ============================================
-  // PHONEPE PAYMENT
-  // ============================================
-
   async initializePhonePe(paymentData) {
     try {
       console.log('📱 Initializing PhonePe payment:', paymentData);
-
       const response = await this.api.post('/orders/payments/phonepe/init', paymentData);
-
       if (!response.data || !response.data.success) {
         return this.createMockPhonePeOrder(paymentData);
       }
-
       return response.data;
     } catch (error) {
       console.error('PhonePe initialization error:', error);
@@ -204,7 +194,6 @@ class PaymentService {
 
   createMockPhonePeOrder(paymentData) {
     const transactionId = 'PHONEPE_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-
     return {
       success: true,
       data: {
@@ -235,20 +224,13 @@ class PaymentService {
     }
   }
 
-  // ============================================
-  // PAYPAL PAYMENT
-  // ============================================
-
   async initializePayPal(paymentData) {
     try {
       console.log('💳 Initializing PayPal payment:', paymentData);
-
       const response = await this.api.post('/orders/payments/paypal/init', paymentData);
-
       if (!response.data || !response.data.success) {
         return this.createMockPayPalOrder(paymentData);
       }
-
       return response.data;
     } catch (error) {
       console.error('PayPal initialization error:', error);
@@ -258,7 +240,6 @@ class PaymentService {
 
   createMockPayPalOrder(paymentData) {
     const token = 'PAYPAL_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-
     return {
       success: true,
       data: {
@@ -289,24 +270,16 @@ class PaymentService {
     }
   }
 
-  // ============================================
-  // COD PAYMENT
-  // ============================================
-
   async confirmCODOrder(orderId) {
     try {
       console.log('📦 Confirming COD payment for order:', orderId);
-
       if (orderId && orderId.startsWith('mock_')) {
         return this.confirmMockCOD(orderId);
       }
-
       const response = await this.api.post('/orders/payments/cod/confirm', { orderId });
-
       if (!response.data || !response.data.success) {
         return this.confirmMockCOD(orderId);
       }
-
       return response.data;
     } catch (error) {
       console.error('COD confirmation error:', error);
@@ -326,14 +299,9 @@ class PaymentService {
     };
   }
 
-  // ============================================
-  // QR CODE PAYMENT
-  // ============================================
-
   async generateQRCode(paymentData) {
     try {
       console.log('📱 Generating QR code for payment:', paymentData);
-
       return {
         success: true,
         data: {
@@ -353,10 +321,6 @@ class PaymentService {
       };
     }
   }
-
-  // ============================================
-  // REFUND
-  // ============================================
 
   async processRefund(orderId, amount, reason) {
     try {
@@ -381,10 +345,6 @@ class PaymentService {
       };
     }
   }
-
-  // ============================================
-  // PAYMENT DETAILS
-  // ============================================
 
   async getPaymentDetails(orderId) {
     try {

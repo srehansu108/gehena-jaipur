@@ -1,4 +1,4 @@
-// src/pages/admin/AdminOrderManagement.jsx - PRODUCTION READY ✅
+// src/pages/admin/AdminOrderManagement.jsx - WITH QR CODE VERIFICATION MANAGEMENT ✅
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
@@ -10,14 +10,20 @@ import {
   ChevronUpDownIcon,
   ArrowPathIcon,
   XMarkIcon,
-  DocumentArrowDownIcon
+  DocumentArrowDownIcon,
+  QrCodeIcon,
+  CheckCircleIcon as CheckIcon,
+  XCircleIcon as XIcon,
+  PhotoIcon,
+  ClipboardDocumentIcon
 } from '@heroicons/react/24/outline';
 import { 
   ShoppingBagIcon,
   ClockIcon,
   CheckCircleIcon,
   XCircleIcon,
-  TruckIcon
+  TruckIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/solid';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -66,7 +72,30 @@ const statusConfig = {
     color: 'bg-orange-100 text-orange-800 border-orange-200', 
     icon: XCircleIcon,
     nextStatuses: []
+  },
+  'Payment Pending': {
+    label: 'Payment Pending',
+    color: 'bg-red-100 text-red-800 border-red-200',
+    icon: ExclamationTriangleIcon,
+    nextStatuses: ['Processing', 'Cancelled']
+  },
+  'Payment Verified': {
+    label: 'Payment Verified',
+    color: 'bg-green-100 text-green-800 border-green-200',
+    icon: CheckCircleIcon,
+    nextStatuses: ['Processing', 'Shipped']
   }
+};
+
+// ============================================
+// QR VERIFICATION STATUS
+// ============================================
+
+const qrVerificationStatus = {
+  pending: { label: 'Pending Verification', color: 'bg-yellow-100 text-yellow-800', icon: ClockIcon },
+  verified: { label: 'Verified', color: 'bg-green-100 text-green-800', icon: CheckCircleIcon },
+  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800', icon: XCircleIcon },
+  reviewing: { label: 'Under Review', color: 'bg-blue-100 text-blue-800', icon: ExclamationTriangleIcon }
 };
 
 // ============================================
@@ -82,6 +111,7 @@ export default function AdminOrderManagement() {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState('all');
   const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -99,7 +129,10 @@ export default function AdminOrderManagement() {
     delivered: 0,
     cancelled: 0,
     revenue: 0,
-    avgOrderValue: 0
+    avgOrderValue: 0,
+    qrPending: 0,
+    qrVerified: 0,
+    qrRejected: 0
   });
   
   // Modal states
@@ -111,6 +144,14 @@ export default function AdminOrderManagement() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [exporting, setExporting] = useState(false);
+  
+  // QR Verification states
+  const [showQRVerificationModal, setShowQRVerificationModal] = useState(false);
+  const [qrOrder, setQrOrder] = useState(null);
+  const [verifyingQR, setVerifyingQR] = useState(false);
+  const [qrVerificationDecision, setQrVerificationDecision] = useState('');
+  const [qrRejectionReason, setQrRejectionReason] = useState('');
+  const [screenshotUrl, setScreenshotUrl] = useState(null);
 
   // ============================================
   // DATA FETCHING - FROM BACKEND ✅
@@ -128,6 +169,7 @@ export default function AdminOrderManagement() {
         sort: sortConfig.key,
         order: sortConfig.direction,
         ...(filterStatus !== 'all' && { status: filterStatus }),
+        ...(filterPaymentMethod !== 'all' && { paymentMethod: filterPaymentMethod }),
         ...(searchTerm && { search: searchTerm })
       });
 
@@ -162,7 +204,10 @@ export default function AdminOrderManagement() {
           delivered: 0,
           cancelled: 0,
           revenue: 0,
-          avgOrderValue: 0
+          avgOrderValue: 0,
+          qrPending: 0,
+          qrVerified: 0,
+          qrRejected: 0
         });
       } else {
         setError(response.data.message || 'Failed to fetch orders');
@@ -170,7 +215,6 @@ export default function AdminOrderManagement() {
     } catch (err) {
       console.error('❌ Error fetching orders:', err);
       
-      // ✅ Better error handling
       if (err.response?.status === 401) {
         setError('Session expired. Please login again.');
         toast.error('Please login again');
@@ -192,6 +236,7 @@ export default function AdminOrderManagement() {
     pagination.itemsPerPage, 
     sortConfig, 
     filterStatus, 
+    filterPaymentMethod,
     searchTerm, 
     token
   ]);
@@ -287,6 +332,128 @@ export default function AdminOrderManagement() {
   };
 
   // ============================================
+  // QR VERIFICATION HANDLERS
+  // ============================================
+
+  // src/pages/admin/AdminOrderManagement.jsx
+
+const openQRVerification = (order) => {
+  // Check if order has QR payment metadata
+  const qrMetadata = order.paymentMetadata?.qrPayment || order.paymentMetadata?.qrVerification;
+  
+  if (!qrMetadata && order.paymentMethod !== 'QR') {
+    toast.error('This order does not have QR payment');
+    return;
+  }
+
+  setQrOrder(order);
+  
+  // Get screenshot URL if available
+  const screenshotPath = order.paymentMetadata?.qrVerification?.screenshotPath;
+  if (screenshotPath) {
+    // ✅ FIXED: Use the correct payments route for screenshots
+    const filename = screenshotPath.split('/').pop();
+    setScreenshotUrl(`${API_URL}/orders/payments/screenshot/${filename}`);
+  } else {
+    setScreenshotUrl(null);
+  }
+  
+  setShowQRVerificationModal(true);
+  setQrVerificationDecision('');
+  setQrRejectionReason('');
+};
+
+  const handleQRVerification = async (decision) => {
+  if (!qrOrder) return;
+  
+  try {
+    setVerifyingQR(true);
+    
+    console.log(`📡 ${decision} QR verification for order:`, qrOrder._id);
+
+    let endpoint;
+    let payload = {};
+    
+    if (decision === 'verified') {
+      // ✅ FIXED: Use the correct payments route
+      endpoint = `${API_URL}/orders/payments/admin/${qrOrder._id}/qr-verify`;
+      payload = { adminNote: 'Payment verified by admin' };
+    } else if (decision === 'rejected') {
+      // ✅ FIXED: Use the correct payments route
+      endpoint = `${API_URL}/orders/payments/admin/${qrOrder._id}/qr-reject`;
+      payload = { reason: qrRejectionReason };
+    } else {
+      toast.error('Invalid decision');
+      return;
+    }
+
+    console.log(`📤 Sending ${decision} request to:`, endpoint);
+    console.log('📦 Payload:', payload);
+
+    const response = await axios.put(
+      endpoint,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    console.log('📦 Response:', response.data);
+
+    if (response.data.success) {
+      toast.success(`QR Payment ${decision === 'verified' ? 'Verified' : 'Rejected'} successfully`);
+      setShowQRVerificationModal(false);
+      setQrOrder(null);
+      setScreenshotUrl(null);
+      setQrRejectionReason('');
+      await fetchOrders();
+    } else {
+      toast.error(response.data.message || 'Failed to verify QR payment');
+    }
+  } catch (err) {
+    console.error('❌ Error verifying QR payment:', err);
+    console.error('❌ Error response:', err.response?.data);
+    toast.error(err.response?.data?.message || 'Failed to verify QR payment');
+  } finally {
+    setVerifyingQR(false);
+  }
+};
+const handleReopenQRPayment = async (orderId) => {
+  try {
+    setVerifyingQR(true);
+    
+    console.log('🔄 Reopening QR payment for order:', orderId);
+
+    const response = await axios.put(
+      `${API_URL}/orders/payments/admin/${orderId}/qr-reopen`,
+      { adminNote: 'Reopened for verification by admin' },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    if (response.data.success) {
+      toast.success('Order reopened for verification');
+      setShowQRVerificationModal(false);
+      setQrOrder(null);
+      setScreenshotUrl(null);
+      setQrRejectionReason('');
+      await fetchOrders();
+    } else {
+      toast.error(response.data.message || 'Failed to reopen order');
+    }
+  } catch (err) {
+    console.error('❌ Error reopening QR payment:', err);
+    toast.error(err.response?.data?.message || 'Failed to reopen order');
+  } finally {
+    setVerifyingQR(false);
+  }
+};
+  // ============================================
   // HANDLER FUNCTIONS
   // ============================================
 
@@ -314,6 +481,11 @@ export default function AdminOrderManagement() {
     setPagination(prev => ({ ...prev, currentPage: 1 }));
   };
 
+  const handlePaymentMethodFilterChange = (value) => {
+    setFilterPaymentMethod(value);
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+  };
+
   // ============================================
   // EXPORT FUNCTIONS
   // ============================================
@@ -323,7 +495,7 @@ export default function AdminOrderManagement() {
       setExporting(true);
       const ordersToExport = orders;
       
-      const headers = ['Order ID', 'Customer', 'Email', 'Total', 'Status', 'Date', 'Items'];
+      const headers = ['Order ID', 'Customer', 'Email', 'Total', 'Status', 'Payment Method', 'Date', 'Items'];
       const csvRows = [headers];
       
       ordersToExport.forEach(order => {
@@ -337,6 +509,7 @@ export default function AdminOrderManagement() {
           order.userEmail || order.shippingAddress?.email || 'N/A',
           order.total || 0,
           order.status || 'Pending',
+          order.paymentMethod || 'N/A',
           new Date(order.createdAt).toLocaleDateString('en-IN'),
           itemsList
         ]);
@@ -382,18 +555,40 @@ export default function AdminOrderManagement() {
     });
   };
 
+  // Check if order has QR payment pending verification
+  const isQRPaymentPending = (order) => {
+    return order.paymentMethod === 'QR' && 
+           order.paymentStatus !== 'Paid' && 
+           order.paymentMetadata?.qrVerification?.verifiedAt;
+  };
+
+  // Get QR verification status
+  const getQRVerificationStatus = (order) => {
+    const metadata = order.paymentMetadata?.qrVerification;
+    if (!metadata) return null;
+    
+    if (metadata.verifiedAt && order.paymentStatus === 'Paid') {
+      return 'verified';
+    }
+    if (metadata.rejectedAt) {
+      return 'rejected';
+    }
+    if (metadata.verifiedAt) {
+      return 'reviewing';
+    }
+    return 'pending';
+  };
+
   // ============================================
   // EFFECTS
   // ============================================
 
-  // Initial fetch
   useEffect(() => {
     if (token) {
       fetchOrders();
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Refetch when filters change
   useEffect(() => {
     if (token) {
       fetchOrders();
@@ -404,7 +599,6 @@ export default function AdminOrderManagement() {
   // RENDER
   // ============================================
 
-  // Loading state
   if (loading && orders.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -490,8 +684,8 @@ export default function AdminOrderManagement() {
         />
       </div>
 
-      {/* ===== REVENUE STATS ===== */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      {/* ===== REVENUE & QR STATS ===== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Total Revenue</p>
           <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.revenue || 0)}</p>
@@ -503,6 +697,20 @@ export default function AdminOrderManagement() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <p className="text-sm text-gray-500">Cancelled Orders</p>
           <p className="text-2xl font-bold text-red-600">{stats.cancelled || 0}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-yellow-200 p-4">
+          <p className="text-sm text-gray-500 flex items-center gap-1">
+            <QrCodeIcon className="h-4 w-4 text-yellow-600" />
+            QR Pending
+          </p>
+          <p className="text-2xl font-bold text-yellow-600">{stats.qrPending || 0}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-green-200 p-4">
+          <p className="text-sm text-gray-500 flex items-center gap-1">
+            <QrCodeIcon className="h-4 w-4 text-green-600" />
+            QR Verified
+          </p>
+          <p className="text-2xl font-bold text-green-600">{stats.qrVerified || 0}</p>
         </div>
       </div>
 
@@ -520,7 +728,7 @@ export default function AdminOrderManagement() {
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
             <FunnelIcon className="h-5 w-5 text-gray-400" />
             <select
               value={filterStatus}
@@ -531,6 +739,19 @@ export default function AdminOrderManagement() {
               {Object.keys(statusConfig).map((status) => (
                 <option key={status} value={status}>{statusConfig[status].label}</option>
               ))}
+            </select>
+            
+            <select
+              value={filterPaymentMethod}
+              onChange={(e) => handlePaymentMethodFilterChange(e.target.value)}
+              className="border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white"
+            >
+              <option value="all">All Payment</option>
+              <option value="QR">UPI QR Code</option>
+              <option value="COD">Cash on Delivery</option>
+              <option value="PhonePe">PhonePe</option>
+              <option value="Razorpay">Razorpay</option>
+              <option value="PayPal">PayPal</option>
             </select>
           </div>
         </div>
@@ -582,6 +803,9 @@ export default function AdminOrderManagement() {
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Status
                 </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Payment
+                </th>
                 <th 
                   className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:text-gray-900"
                   onClick={() => handleSort('createdAt')}
@@ -599,14 +823,14 @@ export default function AdminOrderManagement() {
             <tbody className="divide-y divide-gray-100">
               {loading && orders.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan="8" className="px-6 py-12 text-center text-gray-500">
                     <ArrowPathIcon className="h-8 w-8 animate-spin mx-auto mb-2" />
                     Loading orders...
                   </td>
                 </tr>
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan="8" className="px-6 py-12 text-center text-gray-500">
                     <div>
                       <p className="text-lg mb-2">📦 No orders found</p>
                       <p className="text-sm text-gray-400">
@@ -620,6 +844,11 @@ export default function AdminOrderManagement() {
                   const StatusIcon = statusConfig[order.status]?.icon || ClockIcon;
                   const statusLabel = statusConfig[order.status]?.label || order.status;
                   const statusColor = statusConfig[order.status]?.color || 'bg-gray-100 text-gray-800 border-gray-200';
+                  
+                  // Check if QR verification is needed
+                  const isQR = order.paymentMethod === 'QR';
+                  const qrStatus = getQRVerificationStatus(order);
+                  const isQRPending = isQR && order.paymentStatus !== 'Paid';
                   
                   return (
                     <tr key={order._id} className="hover:bg-gray-50 transition-colors">
@@ -669,11 +898,46 @@ export default function AdminOrderManagement() {
                           {statusLabel}
                         </span>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm text-gray-600">
+                            {order.paymentMethod || 'N/A'}
+                          </span>
+                          {isQR && order.paymentStatus === 'Paid' && (
+                            <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                              <CheckCircleIcon className="h-3 w-3" />
+                              Verified
+                            </span>
+                          )}
+                          {isQR && order.paymentStatus !== 'Paid' && order.paymentStatus !== 'Initiated' && (
+                            <span className="inline-flex items-center gap-1 text-xs text-yellow-600">
+                              <ClockIcon className="h-3 w-3" />
+                              Pending Verification
+                            </span>
+                          )}
+                          {isQR && order.paymentStatus === 'Initiated' && (
+                            <span className="inline-flex items-center gap-1 text-xs text-blue-600">
+                              <ClockIcon className="h-3 w-3" />
+                              Awaiting Details
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {formatDate(order.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1">
+                          {/* QR Verification Button */}
+                          {isQR && order.paymentStatus !== 'Paid' && (
+                            <button 
+                              onClick={() => openQRVerification(order)}
+                              className="p-2 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 rounded-lg transition-all"
+                              title="Verify QR Payment"
+                            >
+                              <QrCodeIcon className="h-5 w-5" />
+                            </button>
+                          )}
                           <button 
                             onClick={() => viewOrderDetails(order._id)}
                             className="p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
@@ -812,6 +1076,27 @@ export default function AdminOrderManagement() {
           orderId={orderToDelete}
         />
       )}
+
+      {/* QR Verification Modal */}
+      {showQRVerificationModal && qrOrder && (
+  <QRVerificationModal
+    order={qrOrder}
+    onClose={() => {
+      setShowQRVerificationModal(false);
+      setQrOrder(null);
+      setScreenshotUrl(null);
+      setQrRejectionReason('');
+    }}
+    onVerify={handleQRVerification}
+    onReopen={handleReopenQRPayment} // ✅ NEW
+    loading={verifyingQR}
+    screenshotUrl={screenshotUrl}
+    rejectionReason={qrRejectionReason}
+    setRejectionReason={setQrRejectionReason}
+    formatCurrency={formatCurrency}
+    formatDate={formatDate}
+  />
+)}
     </div>
   );
 }
@@ -843,6 +1128,23 @@ function StatCard({ label, value, color, icon: Icon }) {
 function OrderDetailsModal({ order, onClose, formatCurrency, formatDate, statusConfig }) {
   const StatusIcon = statusConfig[order.status]?.icon || ClockIcon;
   
+  // Check if QR payment is pending verification
+  const isQRPending = order.paymentMethod === 'QR' && order.paymentStatus === 'Pending';
+  const qrMetadata = order.paymentMetadata?.qrVerification || {};
+  const qrStatus = qrMetadata.status || 'pending';
+  
+  const getQRStatusBadge = () => {
+    switch(qrStatus) {
+      case 'approved':
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">✅ Verified</span>;
+      case 'rejected':
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">❌ Rejected</span>;
+      case 'pending':
+      default:
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">⏳ Pending Review</span>;
+    }
+  };
+  
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -866,6 +1168,9 @@ function OrderDetailsModal({ order, onClose, formatCurrency, formatDate, statusC
                 <StatusIcon className="h-4 w-4" />
                 {statusConfig[order.status]?.label || order.status}
               </span>
+              {isQRPending && (
+                <div className="mt-1">{getQRStatusBadge()}</div>
+              )}
             </div>
           </div>
 
@@ -962,6 +1267,141 @@ function OrderDetailsModal({ order, onClose, formatCurrency, formatDate, statusC
               </table>
             </div>
           </div>
+
+          {/* ============================================ */}
+          {/* QR PAYMENT DETAILS - UPDATED SECTION ✅ */}
+          {/* ============================================ */}
+          {order.paymentMethod === 'QR' && order.paymentMetadata?.qrVerification && (
+            <div className={`rounded-xl p-4 border ${
+              qrStatus === 'approved' ? 'bg-green-50 border-green-200' :
+              qrStatus === 'rejected' ? 'bg-red-50 border-red-200' :
+              'bg-yellow-50 border-yellow-200'
+            }`}>
+              <h3 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <QrCodeIcon className="h-5 w-5 text-blue-600" />
+                QR Payment Details
+                <span className="ml-2">{getQRStatusBadge()}</span>
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {/* Transaction ID */}
+                <div className="col-span-2">
+                  <p className="text-gray-500">Transaction ID</p>
+                  <p className="font-medium text-gray-900">
+                    {qrMetadata.transactionId || 'N/A'}
+                  </p>
+                </div>
+                
+                {/* UPI Reference */}
+                <div className="col-span-2">
+                  <p className="text-gray-500">UPI Reference Number</p>
+                  <p className="font-medium text-gray-900">
+                    {qrMetadata.upiReferenceNumber || 'N/A'}
+                  </p>
+                </div>
+                
+                {/* Amount Paid */}
+                <div>
+                  <p className="text-gray-500">Amount Paid</p>
+                  <p className="font-medium text-gray-900">
+                    {formatCurrency(qrMetadata.amount || order.total)}
+                  </p>
+                </div>
+                
+                {/* Payment Date */}
+                <div>
+                  <p className="text-gray-500">Payment Date</p>
+                  <p className="font-medium text-gray-900">
+                    {qrMetadata.paymentDate || 'N/A'}
+                  </p>
+                </div>
+                
+                {/* Payment Time */}
+                <div>
+                  <p className="text-gray-500">Payment Time</p>
+                  <p className="font-medium text-gray-900">
+                    {qrMetadata.paymentTime || 'N/A'}
+                  </p>
+                </div>
+                
+                {/* Bank Name */}
+                <div>
+                  <p className="text-gray-500">Bank Name</p>
+                  <p className="font-medium text-gray-900">
+                    {qrMetadata.bankName || 'Not provided'}
+                  </p>
+                </div>
+                
+                {/* Submitted At */}
+                <div className="col-span-2">
+                  <p className="text-gray-500">Submitted For Verification</p>
+                  <p className="font-medium text-gray-900">
+                    {formatDate(qrMetadata.submittedAt)}
+                  </p>
+                </div>
+                
+                {/* Review Info - if approved or rejected */}
+                {qrStatus !== 'pending' && (
+                  <>
+                    <div>
+                      <p className="text-gray-500">Reviewed By</p>
+                      <p className="font-medium text-gray-900">
+                        {qrMetadata.reviewedBy || 'Admin'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Reviewed At</p>
+                      <p className="font-medium text-gray-900">
+                        {formatDate(qrMetadata.reviewedAt)}
+                      </p>
+                    </div>
+                    {qrStatus === 'rejected' && qrMetadata.rejectionReason && (
+                      <div className="col-span-2">
+                        <p className="text-gray-500">Rejection Reason</p>
+                        <p className="font-medium text-red-600 bg-red-50 p-2 rounded-lg">
+                          {qrMetadata.rejectionReason}
+                        </p>
+                      </div>
+                    )}
+                    {qrStatus === 'approved' && qrMetadata.adminNote && (
+                      <div className="col-span-2">
+                        <p className="text-gray-500">Admin Note</p>
+                        <p className="font-medium text-green-600 bg-green-50 p-2 rounded-lg">
+                          {qrMetadata.adminNote}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+                
+                {/* Screenshot */}
+                {qrMetadata.screenshotUrl && (
+                  <div className="col-span-2 mt-2">
+                    <p className="text-gray-500 mb-1">Payment Screenshot</p>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden max-h-64">
+                      <img 
+                        src={qrMetadata.screenshotUrl} 
+                        alt="Payment Screenshot" 
+                        className="w-full object-contain max-h-64"
+                        onError={(e) => {
+                          e.target.src = 'https://placehold.co/600x400/f0f0f0/999?text=Screenshot+Not+Available';
+                        }}
+                      />
+                    </div>
+                    <a 
+                      href={qrMetadata.screenshotUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mt-2 text-sm"
+                    >
+                      <PhotoIcon className="h-4 w-4" />
+                      View Full Size
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Order Timeline */}
           {order.statusHistory && order.statusHistory.length > 0 && (
@@ -1131,6 +1571,191 @@ function DeleteConfirmModal({ onClose, onConfirm, orderId }) {
             >
               Delete Order
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// QR VERIFICATION MODAL
+// ============================================
+
+// src/pages/admin/AdminOrderManagement.jsx - QRVerificationModal
+
+function QRVerificationModal({ 
+  order, 
+  onClose, 
+  onVerify, 
+  onReopen, // ✅ NEW
+  loading, 
+  screenshotUrl,
+  rejectionReason,
+  setRejectionReason,
+  formatCurrency,
+  formatDate
+}) {
+  const qrMetadata = order.paymentMetadata?.qrVerification || order.paymentMetadata?.qrPayment || {};
+  const [decision, setDecision] = useState('');
+  const isRejected = order.paymentStatus === 'Failed';
+  
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Modal Header - Show different status if rejected */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <QrCodeIcon className="h-6 w-6 text-yellow-600" />
+            QR Payment Verification
+            <span className={`text-sm font-normal px-2 py-0.5 rounded-full ${
+              isRejected 
+                ? 'bg-red-100 text-red-800' 
+                : 'bg-yellow-100 text-yellow-800'
+            }`}>
+              {isRejected ? 'Rejected' : 'Pending Review'}
+            </span>
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+            <XMarkIcon className="h-6 w-6" />
+          </button>
+        </div>
+        
+        <div className="p-6 space-y-6">
+          {/* ... existing order info ... */}
+
+          {/* Admin Decision - Show different options for rejected orders */}
+          <div className="border-t border-gray-200 pt-4">
+            <h3 className="font-semibold text-gray-700 mb-3">
+              {isRejected ? 'Reopened Order' : 'Admin Decision'}
+            </h3>
+            
+            {isRejected ? (
+              // Show Reopen button for rejected orders
+              <div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <p className="text-sm text-red-700 flex items-center gap-2">
+                    <XIcon className="h-5 w-5" />
+                    This payment was previously rejected.
+                  </p>
+                  {qrMetadata.rejectionReason && (
+                    <p className="text-sm text-red-600 mt-1">
+                      Reason: {qrMetadata.rejectionReason}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => onReopen(order._id)}
+                  disabled={loading}
+                  className="w-full px-4 py-3 bg-yellow-600 text-white rounded-lg font-medium hover:bg-yellow-700 transition-colors disabled:opacity-50"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                      Processing...
+                    </span>
+                  ) : (
+                    'Reopen for Verification'
+                  )}
+                </button>
+              </div>
+            ) : (
+              // Show Approve/Reject for pending orders
+              <>
+                <div className="flex gap-4 mb-4">
+                  <button
+                    onClick={() => setDecision('approve')}
+                    className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
+                      decision === 'approve'
+                        ? 'bg-green-600 text-white shadow-lg'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <CheckIcon className="h-5 w-5 inline mr-2" />
+                    Approve Payment
+                  </button>
+                  <button
+                    onClick={() => setDecision('reject')}
+                    className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
+                      decision === 'reject'
+                        ? 'bg-red-600 text-white shadow-lg'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <XIcon className="h-5 w-5 inline mr-2" />
+                    Reject Payment
+                  </button>
+                </div>
+
+                {decision === 'reject' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Rejection Reason <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="Please provide a reason for rejection..."
+                      rows="3"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none"
+                      required
+                    />
+                  </div>
+                )}
+
+                {decision === 'approve' && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <p className="text-sm text-green-700 flex items-center gap-2">
+                      <CheckIcon className="h-5 w-5" />
+                      You are about to approve this QR payment. The order will be marked as paid.
+                    </p>
+                  </div>
+                )}
+
+                {/* Action Buttons for Pending */}
+                <div className="flex gap-3 pt-2 border-t border-gray-200 mt-4">
+                  <button
+                    onClick={onClose}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (decision === 'approve') {
+                        onVerify('verified');
+                      } else if (decision === 'reject') {
+                        if (!rejectionReason.trim()) {
+                          toast.error('Please provide a rejection reason');
+                          return;
+                        }
+                        onVerify('rejected');
+                      } else {
+                        toast.error('Please select a decision');
+                        return;
+                      }
+                    }}
+                    disabled={loading || !decision || (decision === 'reject' && !rejectionReason.trim())}
+                    className={`flex-1 px-4 py-2 rounded-lg text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      decision === 'approve'
+                        ? 'bg-green-600 hover:bg-green-700'
+                        : decision === 'reject'
+                        ? 'bg-red-600 hover:bg-red-700'
+                        : 'bg-gray-400'
+                    }`}
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                        Processing...
+                      </span>
+                    ) : (
+                      decision === 'approve' ? 'Approve & Confirm Payment' : 'Reject Payment'
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

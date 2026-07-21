@@ -98,7 +98,7 @@ export function NavbarMega() {
     { title: 'Home', slug: '/' },
     { title: 'Shop', slug: '/shop' },
     { title: 'About Us', slug: '/about' },
-    { title: 'Boutiques', slug: '/stores' },
+    { title: 'Boutiques', slug: '/botique' },
     { title: 'Contact Us', slug: '/contact' },
   ];
 
