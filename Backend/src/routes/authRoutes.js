@@ -30,8 +30,9 @@ const signupValidation = [
     .withMessage('Please enter a valid 10-digit mobile number'),
   body('email')
     .isEmail()
-    .withMessage('Please enter a valid email address')
-    .normalizeEmail(),
+    .withMessage('Please enter a valid email address'),
+    // ✅ REMOVE THIS LINE - IT REMOVES DOTS FROM EMAIL
+    // .normalizeEmail(),
   body('password')
     .isLength({ min: 8 })
     .withMessage('Password must be at least 8 characters')
@@ -92,8 +93,9 @@ const signupValidation = [
     .notEmpty()
     .withMessage('Business email is required for business accounts')
     .isEmail()
-    .withMessage('Please enter a valid business email address')
-    .normalizeEmail(),
+    .withMessage('Please enter a valid business email address'),
+    // ✅ REMOVE normalizeEmail() here too
+    // .normalizeEmail(),
   body('businessDetails.website')
     .optional()
     .isURL()

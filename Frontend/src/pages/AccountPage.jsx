@@ -1,4 +1,5 @@
-// src/pages/AccountPage.jsx - COMPLETE WITH NAVIGATION STATE HANDLING ✅
+// src/pages/AccountPage.jsx - COMPLETE WITH NAVIGATION STATE HANDLING & CLEAN TIMELINE ✅
+
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -21,6 +22,46 @@ const statusConfig = {
   Delivered: { label: 'Delivered', color: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
   Cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
   Returned: { label: 'Returned', color: 'bg-orange-100 text-orange-800 border-orange-200', icon: XCircle }
+};
+
+// ============================================
+// HELPER: Deduplicate Status History
+// ============================================
+
+const getUniqueStatusHistory = (history) => {
+  if (!history || history.length === 0) return [];
+  
+  const unique = [];
+  const seen = new Map();
+  
+  // Process entries from oldest to newest
+  for (const entry of history) {
+    const key = entry.status;
+    
+    // If we already have this status, keep the one with more info
+    if (seen.has(key)) {
+      const existing = seen.get(key);
+      const existingNote = existing.note || '';
+      const newNote = entry.note || '';
+      
+      // Keep the entry with the more detailed note
+      if (newNote.length > existingNote.length) {
+        seen.set(key, entry);
+      }
+      // If same note length, keep the newer one
+      else if (newNote.length === existingNote.length && 
+               new Date(entry.date) > new Date(existing.date)) {
+        seen.set(key, entry);
+      }
+    } else {
+      seen.set(key, entry);
+    }
+  }
+  
+  // Convert Map back to array and sort by date
+  return Array.from(seen.values()).sort((a, b) => 
+    new Date(a.date) - new Date(b.date)
+  );
 };
 
 export function AccountPage() {
@@ -52,23 +93,16 @@ export function AccountPage() {
 
   // Handle navigation state from OrderSuccessModal
   useEffect(() => {
-    // Check if we have navigation state from OrderSuccessModal
     const state = location.state;
     if (state) {
-      // Set active tab to orders if specified
       if (state.activeTab) {
         setActiveTab(state.activeTab);
       }
-      
-      // If there's a selected order ID, fetch and show it
       if (state.selectedOrderId) {
-        // Small delay to ensure orders are loaded first
         setTimeout(() => {
           viewOrderDetails(state.selectedOrderId);
         }, 500);
       }
-      
-      // Clear the location state to prevent re-triggering on refresh
       window.history.replaceState({}, document.title);
     }
   }, [location]);
@@ -103,8 +137,6 @@ export function AccountPage() {
   const fetchAccountData = async () => {
     try {
       setError('');
-      
-      // Calculate account data from orders
       const totalOrders = orders.length;
       const totalSpent = orders.reduce((sum, o) => sum + (o.total || 0), 0);
       
@@ -181,6 +213,7 @@ export function AccountPage() {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
@@ -756,7 +789,7 @@ function OrdersTab({
 }
 
 // ============================================
-// ORDER DETAILS MODAL
+// ORDER DETAILS MODAL - WITH CLEAN TIMELINE ✅
 // ============================================
 
 function OrderDetailsModal({ 
@@ -887,21 +920,24 @@ function OrderDetailsModal({
             </div>
           </div>
 
-          {/* Order Timeline */}
+          {/* Order Timeline - ✅ WITH DEDUPLICATION */}
           {order.statusHistory && order.statusHistory.length > 0 && (
             <div>
               <h3 className="font-semibold text-gray-700 mb-3">Order Timeline</h3>
               <div className="space-y-2">
-                {order.statusHistory.slice().reverse().map((history, idx) => (
-                  <div key={idx} className="flex items-start gap-3 text-sm">
-                    <div className="w-2 h-2 mt-1.5 rounded-full bg-pink-500 shrink-0"></div>
-                    <div>
-                      <p className="font-medium">{history.status}</p>
-                      <p className="text-gray-500 text-xs">{formatDate(history.date)}</p>
-                      {history.note && <p className="text-gray-400 text-xs">{history.note}</p>}
+                {getUniqueStatusHistory(order.statusHistory)
+                  .slice()
+                  .reverse()
+                  .map((history, idx) => (
+                    <div key={idx} className="flex items-start gap-3 text-sm">
+                      <div className="w-2 h-2 mt-1.5 rounded-full bg-pink-500 shrink-0"></div>
+                      <div>
+                        <p className="font-medium">{history.status}</p>
+                        <p className="text-gray-500 text-xs">{formatDate(history.date)}</p>
+                        {history.note && <p className="text-gray-400 text-xs">{history.note}</p>}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           )}

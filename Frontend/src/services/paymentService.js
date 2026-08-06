@@ -12,6 +12,32 @@ class PaymentService {
         'Content-Type': 'application/json',
       },
     });
+
+    // ✅ REQUEST INTERCEPTOR - Properly handles FormData
+    this.api.interceptors.request.use(
+      (config) => {
+        // ✅ If data is FormData, remove Content-Type header
+        // so Axios can set it correctly with boundary
+        if (config.data instanceof FormData) {
+          console.log('📸 FormData detected - removing Content-Type header');
+          delete config.headers['Content-Type'];
+        }
+        
+        // ✅ Log request details for debugging
+        console.log('📤 Request:', {
+          url: config.url,
+          method: config.method,
+          hasFile: config.data instanceof FormData,
+          headers: config.headers,
+        });
+        
+        return config;
+      },
+      (error) => {
+        console.error('❌ Request interceptor error:', error);
+        return Promise.reject(error);
+      }
+    );
   }
 
   setToken(token) {
@@ -62,13 +88,50 @@ class PaymentService {
 
   async verifyQRPayment(data) {
     try {
-      console.log('🔐 verifyQRPayment called:', data);
-      const response = await this.api.post('/orders/payments/qr/verify', data);
+      console.log('🔐 verifyQRPayment called');
+      
+      // ✅ Log FormData contents for debugging
+      if (data instanceof FormData) {
+        console.log('📸 FormData contents:');
+        let hasFile = false;
+        for (let [key, value] of data.entries()) {
+          if (value instanceof File) {
+            console.log(`  ${key}: [File] ${value.name} (${value.size} bytes, ${value.type})`);
+            hasFile = true;
+          } else {
+            console.log(`  ${key}: ${value}`);
+          }
+        }
+        if (!hasFile) {
+          console.warn('⚠️ No file found in FormData!');
+        }
+      }
+
+      // ✅ Let the interceptor handle Content-Type
+      const response = await this.api.post('/orders/payments/qr/verify', data, {
+        timeout: 30000, // ✅ Increase timeout for file upload
+      });
+      
       console.log('📦 verifyQRPayment response:', response.data);
       return response.data;
     } catch (error) {
       console.error('❌ verifyQRPayment error:', error);
-      throw error;
+      
+      // ✅ Log more details about the error
+      if (error.response) {
+        console.error('❌ Error response data:', error.response.data);
+        console.error('❌ Error status:', error.response.status);
+        console.error('❌ Error headers:', error.response.headers);
+      } else if (error.request) {
+        console.error('❌ No response received:', error.request);
+      }
+      
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Failed to verify payment. Please try again.';
+      
+      throw new Error(errorMessage);
     }
   }
 

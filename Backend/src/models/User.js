@@ -36,11 +36,8 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: true,
-    unique: true,
+    unique: true,  // ✅ SIMPLE UNIQUE - NO set FUNCTION
     trim: true,
-    set: function(email) {
-      return email.trim().toLowerCase();
-    },
     match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     index: true,
   },
@@ -90,11 +87,10 @@ const userSchema = new mongoose.Schema({
       trim: true,
       uppercase: true,
       unique: true,
-      sparse: true, // Allows multiple null values
+      sparse: true,
       validate: {
         validator: function(v) {
-          // GST Format: 22AAAAA0000A1Z5 (15 characters)
-          if (!v) return true; // Optional field
+          if (!v) return true;
           const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
           return gstRegex.test(v);
         },
@@ -106,11 +102,10 @@ const userSchema = new mongoose.Schema({
       trim: true,
       uppercase: true,
       unique: true,
-      sparse: true, // Allows multiple null values
+      sparse: true,
       validate: {
         validator: function(v) {
-          // PAN Format: ABCDE1234F (10 characters)
-          if (!v) return true; // Optional field
+          if (!v) return true;
           const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
           return panRegex.test(v);
         },
@@ -137,9 +132,6 @@ const userSchema = new mongoose.Schema({
       trim: true,
       required: function() {
         return this.accountType === 'business';
-      },
-      set: function(email) {
-        return email.trim().toLowerCase();
       },
       match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     },

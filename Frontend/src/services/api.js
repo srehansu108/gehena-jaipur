@@ -1032,17 +1032,17 @@ export const bulkImportProducts = async (products) => {
 /**
  * Export products as CSV
  * @param {Object} params - Query parameters for filtering
- * @returns {Promise} CSV data
+ * @returns {Promise} CSV blob
  */
 export const exportProductsCSV = async (params = {}) => {
   try {
     console.log('📤 Exporting products as CSV...', params);
     const response = await api.get('/products/admin/export/csv', { 
       params,
-      responseType: 'blob' 
+      responseType: 'blob' // ✅ Returns blob
     });
     console.log('✅ CSV export completed');
-    return response.data;
+    return response.data; // ✅ This is the blob
   } catch (error) {
     console.error('❌ Error exporting products as CSV:', error);
     throw error;
@@ -1052,14 +1052,17 @@ export const exportProductsCSV = async (params = {}) => {
 /**
  * Export products as JSON
  * @param {Object} params - Query parameters for filtering
- * @returns {Promise} JSON data
+ * @returns {Promise} JSON blob
  */
 export const exportProductsJSON = async (params = {}) => {
   try {
     console.log('📤 Exporting products as JSON...', params);
-    const response = await api.get('/products/admin/export/json', { params });
+    const response = await api.get('/products/admin/export/json', { 
+      params,
+      responseType: 'blob' // ✅ FIXED: Add responseType: 'blob'
+    });
     console.log('✅ JSON export completed');
-    return response.data;
+    return response.data; // ✅ Returns blob
   } catch (error) {
     console.error('❌ Error exporting products as JSON:', error);
     throw error;

@@ -39,21 +39,21 @@ exports.signup = async (req, res) => {
 
     console.log('📝 SIGNUP ATTEMPT:', { 
       username, 
-      email, 
+      email: email, // ✅ Keep original email with dots
       mobileNumber, 
       accountType,
       hasBusinessDetails: !!businessDetails 
     });
 
-    // Normalize inputs
-    const normalizedEmail = email.trim();
+    // ✅ DON'T modify email - keep EXACTLY as entered with dots
+    const userEmail = email.trim(); // Just trim whitespace, NO toLowerCase()
     const normalizedUsername = username.trim().toLowerCase();
     const normalizedMobile = mobileNumber.trim();
 
-    // Check if user exists
+    // ✅ Check if user exists - KEEP email with dots
     const existingUser = await User.findOne({
       $or: [
-        { email: normalizedEmail.toLowerCase() },
+        { email: userEmail }, // ✅ EXACT match with dots preserved
         { username: normalizedUsername },
         { mobileNumber: normalizedMobile }
       ]
@@ -61,7 +61,7 @@ exports.signup = async (req, res) => {
 
     if (existingUser) {
       let field = '';
-      if (existingUser.email === normalizedEmail.toLowerCase()) field = 'Email';
+      if (existingUser.email === userEmail) field = 'Email';
       else if (existingUser.username === normalizedUsername) field = 'Username';
       else if (existingUser.mobileNumber === normalizedMobile) field = 'Mobile number';
       
@@ -98,13 +98,13 @@ exports.signup = async (req, res) => {
       }
     }
 
-    // Build user data
+    // ✅ Build user data - KEEP email with dots
     const userData = {
       username: normalizedUsername,
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       mobileNumber: normalizedMobile,
-      email: normalizedEmail,
+      email: userEmail, // ✅ SAVE WITH DOTS PRESERVED
       password,
       accountType: accountType || 'personal',
     };
@@ -129,6 +129,7 @@ exports.signup = async (req, res) => {
     await user.save();
 
     console.log('✅ User saved successfully');
+    console.log('  - Email:', user.email); // ✅ Should show with dots
     console.log('  - Account Type:', user.accountType);
     console.log('  - User ID:', user._id);
     if (user.accountType === 'business') {
@@ -185,8 +186,9 @@ exports.login = async (req, res) => {
     let user;
 
     if (isEmail) {
+      // ✅ KEEP email with dots - no toLowerCase()
       user = await User.findOne({ 
-        email: identifier.toLowerCase() 
+        email: identifier.trim() // ✅ EXACT match with dots
       }).select('+password');
     } else {
       user = await User.findOne({ 
@@ -220,9 +222,9 @@ exports.login = async (req, res) => {
     // Log login info
     console.log('✅ Login successful:', {
       userId: user._id,
+      email: user.email, // ✅ Shows with dots
       username: user.username,
       accountType: user.accountType,
-      isBusiness: user.accountType === 'business',
     });
 
     return res.json({
@@ -294,7 +296,8 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    // ✅ Keep email with dots - no toLowerCase()
+    const user = await User.findOne({ email: email.trim() });
 
     if (!user) {
       return res.status(404).json({
@@ -339,8 +342,9 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
+    // ✅ Keep email with dots - no toLowerCase()
     const user = await User.findOne({
-      email: email.toLowerCase(),
+      email: email.trim(),
       resetPasswordCode: code,
       resetPasswordExpiry: { $gt: new Date() },
     });
@@ -386,7 +390,6 @@ exports.verifyGST = async (req, res) => {
       });
     }
 
-    // Validate GST format
     const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
     if (!gstRegex.test(gstNumber.toUpperCase())) {
       return res.status(400).json({
@@ -395,7 +398,6 @@ exports.verifyGST = async (req, res) => {
       });
     }
 
-    // Check if GST already exists
     const existingUser = await User.findOne({
       'businessDetails.gstNumber': gstNumber.toUpperCase()
     });
@@ -407,8 +409,6 @@ exports.verifyGST = async (req, res) => {
       });
     }
 
-    // TODO: Integrate with GST API for real verification
-    // For now, return success
     res.json({
       success: true,
       message: 'GST number is valid and available',
@@ -437,7 +437,6 @@ exports.verifyPAN = async (req, res) => {
       });
     }
 
-    // Validate PAN format
     const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
     if (!panRegex.test(panNumber.toUpperCase())) {
       return res.status(400).json({
@@ -446,7 +445,6 @@ exports.verifyPAN = async (req, res) => {
       });
     }
 
-    // Check if PAN already exists
     const existingUser = await User.findOne({
       'businessDetails.panNumber': panNumber.toUpperCase()
     });
@@ -539,7 +537,6 @@ exports.updateBusinessProfile = async (req, res) => {
       }
     });
 
-    // Don't allow updating GST/PAN through this endpoint (verification needed)
     const updatedUser = await User.findByIdAndUpdate(
       req.userId,
       { $set: updates },

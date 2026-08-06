@@ -87,6 +87,35 @@ const statusConfig = {
   }
 };
 
+const getUniqueStatusHistory = (history) => {
+  if (!history || history.length === 0) return [];
+  
+  const unique = [];
+  const seen = new Map();
+  
+  for (const entry of history) {
+    const key = entry.status;
+    if (seen.has(key)) {
+      const existing = seen.get(key);
+      const existingNote = existing.note || '';
+      const newNote = entry.note || '';
+      if (newNote.length > existingNote.length) {
+        seen.set(key, entry);
+      } else if (newNote.length === existingNote.length && 
+                 new Date(entry.date) > new Date(existing.date)) {
+        seen.set(key, entry);
+      }
+    } else {
+      seen.set(key, entry);
+    }
+  }
+  
+  return Array.from(seen.values()).sort((a, b) => 
+    new Date(a.date) - new Date(b.date)
+  );
+};
+
+
 // ============================================
 // QR VERIFICATION STATUS
 // ============================================
@@ -162,7 +191,6 @@ export default function AdminOrderManagement() {
       setLoading(true);
       setError(null);
 
-      // ✅ ALWAYS fetch from backend API
       const params = new URLSearchParams({
         page: pagination.currentPage,
         limit: pagination.itemsPerPage,
@@ -332,14 +360,17 @@ export default function AdminOrderManagement() {
   };
 
   // ============================================
-  // QR VERIFICATION HANDLERS
+  // QR VERIFICATION HANDLERS - FIXED ✅
   // ============================================
 
-  // src/pages/admin/AdminOrderManagement.jsx
-
-const openQRVerification = (order) => {
+  const openQRVerification = (order) => {
+  console.log('🔍 Opening QR verification for order:', order._id);
+  console.log('📦 Order payment method:', order.paymentMethod);
+  console.log('📦 Order payment status:', order.paymentStatus);
+  console.log('📦 Payment metadata:', order.paymentMetadata);
+  
   // Check if order has QR payment metadata
-  const qrMetadata = order.paymentMetadata?.qrPayment || order.paymentMetadata?.qrVerification;
+  const qrMetadata = order.paymentMetadata?.qrVerification || order.paymentMetadata?.qrPayment;
   
   if (!qrMetadata && order.paymentMethod !== 'QR') {
     toast.error('This order does not have QR payment');
@@ -348,111 +379,145 @@ const openQRVerification = (order) => {
 
   setQrOrder(order);
   
-  // Get screenshot URL if available
-  const screenshotPath = order.paymentMetadata?.qrVerification?.screenshotPath;
-  if (screenshotPath) {
-    // ✅ FIXED: Use the correct payments route for screenshots
-    const filename = screenshotPath.split('/').pop();
-    setScreenshotUrl(`${API_URL}/orders/payments/screenshot/${filename}`);
-  } else {
-    setScreenshotUrl(null);
+  // ✅ Extract screenshot URL from multiple possible locations
+  let screenshotUrl = null;
+  
+  // 1. Check qrVerification.screenshotUrl (Cloudinary or full URL)
+  if (order.paymentMetadata?.qrVerification?.screenshotUrl) {
+    screenshotUrl = order.paymentMetadata.qrVerification.screenshotUrl;
+    console.log('✅ Found screenshotUrl in qrVerification:', screenshotUrl);
   }
   
+  // 2. Check qrVerification.screenshotPath (local file path)
+  if (!screenshotUrl && order.paymentMetadata?.qrVerification?.screenshotPath) {
+    const screenshotPath = order.paymentMetadata.qrVerification.screenshotPath;
+    const filename = screenshotPath.split('/').pop();
+    screenshotUrl = `${API_URL}/orders/payments/screenshot/${filename}`;
+    console.log('✅ Generated screenshotUrl from path:', screenshotUrl);
+  }
+  
+  // 3. Check qrVerification.filename
+  if (!screenshotUrl && order.paymentMetadata?.qrVerification?.filename) {
+    screenshotUrl = `${API_URL}/orders/payments/screenshot/${order.paymentMetadata.qrVerification.filename}`;
+    console.log('✅ Generated screenshotUrl from filename:', screenshotUrl);
+  }
+  
+  // 4. Check qrVerification.publicId (Cloudinary)
+  if (!screenshotUrl && order.paymentMetadata?.qrVerification?.publicId) {
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+    screenshotUrl = `https://res.cloudinary.com/${cloudName}/image/upload/${order.paymentMetadata.qrVerification.publicId}`;
+    console.log('✅ Generated Cloudinary URL from publicId:', screenshotUrl);
+  }
+  
+  // 5. Check qrPayment (legacy)
+  if (!screenshotUrl && order.paymentMetadata?.qrPayment?.screenshotUrl) {
+    screenshotUrl = order.paymentMetadata.qrPayment.screenshotUrl;
+    console.log('✅ Found screenshotUrl in qrPayment:', screenshotUrl);
+  }
+  
+  // 6. Check if there's a direct screenshotUrl in the order
+  if (!screenshotUrl && order.screenshotUrl) {
+    screenshotUrl = order.screenshotUrl;
+    console.log('✅ Found screenshotUrl in order:', screenshotUrl);
+  }
+  
+  console.log('📸 Final screenshot URL:', screenshotUrl || 'No screenshot found');
+  setScreenshotUrl(screenshotUrl);
   setShowQRVerificationModal(true);
   setQrVerificationDecision('');
   setQrRejectionReason('');
 };
 
   const handleQRVerification = async (decision) => {
-  if (!qrOrder) return;
-  
-  try {
-    setVerifyingQR(true);
+    if (!qrOrder) return;
     
-    console.log(`📡 ${decision} QR verification for order:`, qrOrder._id);
+    try {
+      setVerifyingQR(true);
+      
+      console.log(`📡 ${decision} QR verification for order:`, qrOrder._id);
 
-    let endpoint;
-    let payload = {};
-    
-    if (decision === 'verified') {
-      // ✅ FIXED: Use the correct payments route
-      endpoint = `${API_URL}/orders/payments/admin/${qrOrder._id}/qr-verify`;
-      payload = { adminNote: 'Payment verified by admin' };
-    } else if (decision === 'rejected') {
-      // ✅ FIXED: Use the correct payments route
-      endpoint = `${API_URL}/orders/payments/admin/${qrOrder._id}/qr-reject`;
-      payload = { reason: qrRejectionReason };
-    } else {
-      toast.error('Invalid decision');
-      return;
-    }
-
-    console.log(`📤 Sending ${decision} request to:`, endpoint);
-    console.log('📦 Payload:', payload);
-
-    const response = await axios.put(
-      endpoint,
-      payload,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+      let endpoint;
+      let payload = {};
+      
+      if (decision === 'verified') {
+        endpoint = `${API_URL}/orders/payments/qr/approve/${qrOrder._id}`;
+        payload = { adminNote: 'Payment verified by admin' };
+      } else if (decision === 'rejected') {
+        endpoint = `${API_URL}/orders/payments/qr/reject/${qrOrder._id}`;
+        payload = { reason: qrRejectionReason || 'Payment verification failed' };
+      } else {
+        toast.error('Invalid decision');
+        return;
       }
-    );
 
-    console.log('📦 Response:', response.data);
+      console.log(`📤 Sending ${decision} request to:`, endpoint);
+      console.log('📦 Payload:', payload);
 
-    if (response.data.success) {
-      toast.success(`QR Payment ${decision === 'verified' ? 'Verified' : 'Rejected'} successfully`);
-      setShowQRVerificationModal(false);
-      setQrOrder(null);
-      setScreenshotUrl(null);
-      setQrRejectionReason('');
-      await fetchOrders();
-    } else {
-      toast.error(response.data.message || 'Failed to verify QR payment');
-    }
-  } catch (err) {
-    console.error('❌ Error verifying QR payment:', err);
-    console.error('❌ Error response:', err.response?.data);
-    toast.error(err.response?.data?.message || 'Failed to verify QR payment');
-  } finally {
-    setVerifyingQR(false);
-  }
-};
-const handleReopenQRPayment = async (orderId) => {
-  try {
-    setVerifyingQR(true);
-    
-    console.log('🔄 Reopening QR payment for order:', orderId);
-
-    const response = await axios.put(
-      `${API_URL}/orders/payments/admin/${orderId}/qr-reopen`,
-      { adminNote: 'Reopened for verification by admin' },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
+      const response = await axios.put(
+        endpoint,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
         }
-      }
-    );
+      );
 
-    if (response.data.success) {
-      toast.success('Order reopened for verification');
-      setShowQRVerificationModal(false);
-      setQrOrder(null);
-      setScreenshotUrl(null);
-      setQrRejectionReason('');
-      await fetchOrders();
-    } else {
-      toast.error(response.data.message || 'Failed to reopen order');
+      console.log('📦 Response:', response.data);
+
+      if (response.data.success) {
+        toast.success(`QR Payment ${decision === 'verified' ? 'Verified' : 'Rejected'} successfully`);
+        setShowQRVerificationModal(false);
+        setQrOrder(null);
+        setScreenshotUrl(null);
+        setQrRejectionReason('');
+        await fetchOrders();
+      } else {
+        toast.error(response.data.message || 'Failed to verify QR payment');
+      }
+    } catch (err) {
+      console.error('❌ Error verifying QR payment:', err);
+      console.error('❌ Error response:', err.response?.data);
+      toast.error(err.response?.data?.message || 'Failed to verify QR payment');
+    } finally {
+      setVerifyingQR(false);
     }
-  } catch (err) {
-    console.error('❌ Error reopening QR payment:', err);
-    toast.error(err.response?.data?.message || 'Failed to reopen order');
-  } finally {
-    setVerifyingQR(false);
-  }
-};
+  };
+
+  const handleReopenQRPayment = async (orderId) => {
+    try {
+      setVerifyingQR(true);
+      
+      console.log('🔄 Reopening QR payment for order:', orderId);
+
+      const response = await axios.put(
+        `${API_URL}/orders/payments/qr/reopen/${orderId}`,
+        { adminNote: 'Reopened for verification by admin' },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (response.data.success) {
+        toast.success('Order reopened for verification');
+        setShowQRVerificationModal(false);
+        setQrOrder(null);
+        setScreenshotUrl(null);
+        setQrRejectionReason('');
+        await fetchOrders();
+      } else {
+        toast.error(response.data.message || 'Failed to reopen order');
+      }
+    } catch (err) {
+      console.error('❌ Error reopening QR payment:', err);
+      toast.error(err.response?.data?.message || 'Failed to reopen order');
+    } finally {
+      setVerifyingQR(false);
+    }
+  };
+
   // ============================================
   // HANDLER FUNCTIONS
   // ============================================
@@ -536,6 +601,7 @@ const handleReopenQRPayment = async (orderId) => {
     }
   };
 
+
   // ============================================
   // FORMATTING HELPERS
   // ============================================
@@ -559,7 +625,8 @@ const handleReopenQRPayment = async (orderId) => {
   const isQRPaymentPending = (order) => {
     return order.paymentMethod === 'QR' && 
            order.paymentStatus !== 'Paid' && 
-           order.paymentMetadata?.qrVerification?.verifiedAt;
+           order.paymentStatus !== 'Verified' &&
+           order.paymentMetadata?.qrVerification?.status === 'pending';
   };
 
   // Get QR verification status
@@ -567,16 +634,16 @@ const handleReopenQRPayment = async (orderId) => {
     const metadata = order.paymentMetadata?.qrVerification;
     if (!metadata) return null;
     
-    if (metadata.verifiedAt && order.paymentStatus === 'Paid') {
+    if (metadata.status === 'approved' || order.paymentStatus === 'Paid') {
       return 'verified';
     }
-    if (metadata.rejectedAt) {
+    if (metadata.status === 'rejected') {
       return 'rejected';
     }
-    if (metadata.verifiedAt) {
-      return 'reviewing';
+    if (metadata.status === 'pending') {
+      return 'pending';
     }
-    return 'pending';
+    return null;
   };
 
   // ============================================
@@ -587,7 +654,7 @@ const handleReopenQRPayment = async (orderId) => {
     if (token) {
       fetchOrders();
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (token) {
@@ -845,10 +912,9 @@ const handleReopenQRPayment = async (orderId) => {
                   const statusLabel = statusConfig[order.status]?.label || order.status;
                   const statusColor = statusConfig[order.status]?.color || 'bg-gray-100 text-gray-800 border-gray-200';
                   
-                  // Check if QR verification is needed
                   const isQR = order.paymentMethod === 'QR';
                   const qrStatus = getQRVerificationStatus(order);
-                  const isQRPending = isQR && order.paymentStatus !== 'Paid';
+                  const isQRPending = isQR && order.paymentStatus !== 'Paid' && order.paymentStatus !== 'Verified';
                   
                   return (
                     <tr key={order._id} className="hover:bg-gray-50 transition-colors">
@@ -909,7 +975,7 @@ const handleReopenQRPayment = async (orderId) => {
                               Verified
                             </span>
                           )}
-                          {isQR && order.paymentStatus !== 'Paid' && order.paymentStatus !== 'Initiated' && (
+                          {isQR && order.paymentStatus === 'Pending' && (
                             <span className="inline-flex items-center gap-1 text-xs text-yellow-600">
                               <ClockIcon className="h-3 w-3" />
                               Pending Verification
@@ -921,6 +987,12 @@ const handleReopenQRPayment = async (orderId) => {
                               Awaiting Details
                             </span>
                           )}
+                          {isQR && order.paymentStatus === 'Failed' && (
+                            <span className="inline-flex items-center gap-1 text-xs text-red-600">
+                              <XCircleIcon className="h-3 w-3" />
+                              Rejected
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
@@ -929,7 +1001,7 @@ const handleReopenQRPayment = async (orderId) => {
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-1">
                           {/* QR Verification Button */}
-                          {isQR && order.paymentStatus !== 'Paid' && (
+                          {isQR && (order.paymentStatus === 'Pending' || order.paymentStatus === 'Initiated') && (
                             <button 
                               onClick={() => openQRVerification(order)}
                               className="p-2 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 rounded-lg transition-all"
@@ -1088,9 +1160,9 @@ const handleReopenQRPayment = async (orderId) => {
       setQrRejectionReason('');
     }}
     onVerify={handleQRVerification}
-    onReopen={handleReopenQRPayment} // ✅ NEW
+    onReopen={handleReopenQRPayment}
     loading={verifyingQR}
-    screenshotUrl={screenshotUrl}
+    screenshotUrl={screenshotUrl}  // ✅ This is already passed
     rejectionReason={qrRejectionReason}
     setRejectionReason={setQrRejectionReason}
     formatCurrency={formatCurrency}
@@ -1128,7 +1200,6 @@ function StatCard({ label, value, color, icon: Icon }) {
 function OrderDetailsModal({ order, onClose, formatCurrency, formatDate, statusConfig }) {
   const StatusIcon = statusConfig[order.status]?.icon || ClockIcon;
   
-  // Check if QR payment is pending verification
   const isQRPending = order.paymentMethod === 'QR' && order.paymentStatus === 'Pending';
   const qrMetadata = order.paymentMetadata?.qrVerification || {};
   const qrStatus = qrMetadata.status || 'pending';
@@ -1268,9 +1339,7 @@ function OrderDetailsModal({ order, onClose, formatCurrency, formatDate, statusC
             </div>
           </div>
 
-          {/* ============================================ */}
-          {/* QR PAYMENT DETAILS - UPDATED SECTION ✅ */}
-          {/* ============================================ */}
+          {/* QR PAYMENT DETAILS */}
           {order.paymentMethod === 'QR' && order.paymentMetadata?.qrVerification && (
             <div className={`rounded-xl p-4 border ${
               qrStatus === 'approved' ? 'bg-green-50 border-green-200' :
@@ -1284,55 +1353,42 @@ function OrderDetailsModal({ order, onClose, formatCurrency, formatDate, statusC
               </h3>
               
               <div className="grid grid-cols-2 gap-3 text-sm">
-                {/* Transaction ID */}
                 <div className="col-span-2">
                   <p className="text-gray-500">Transaction ID</p>
                   <p className="font-medium text-gray-900">
                     {qrMetadata.transactionId || 'N/A'}
                   </p>
                 </div>
-                
-                {/* UPI Reference */}
                 <div className="col-span-2">
                   <p className="text-gray-500">UPI Reference Number</p>
                   <p className="font-medium text-gray-900">
                     {qrMetadata.upiReferenceNumber || 'N/A'}
                   </p>
                 </div>
-                
-                {/* Amount Paid */}
                 <div>
                   <p className="text-gray-500">Amount Paid</p>
                   <p className="font-medium text-gray-900">
                     {formatCurrency(qrMetadata.amount || order.total)}
                   </p>
                 </div>
-                
-                {/* Payment Date */}
                 <div>
                   <p className="text-gray-500">Payment Date</p>
                   <p className="font-medium text-gray-900">
                     {qrMetadata.paymentDate || 'N/A'}
                   </p>
                 </div>
-                
-                {/* Payment Time */}
                 <div>
                   <p className="text-gray-500">Payment Time</p>
                   <p className="font-medium text-gray-900">
                     {qrMetadata.paymentTime || 'N/A'}
                   </p>
                 </div>
-                
-                {/* Bank Name */}
                 <div>
                   <p className="text-gray-500">Bank Name</p>
                   <p className="font-medium text-gray-900">
                     {qrMetadata.bankName || 'Not provided'}
                   </p>
                 </div>
-                
-                {/* Submitted At */}
                 <div className="col-span-2">
                   <p className="text-gray-500">Submitted For Verification</p>
                   <p className="font-medium text-gray-900">
@@ -1340,7 +1396,6 @@ function OrderDetailsModal({ order, onClose, formatCurrency, formatDate, statusC
                   </p>
                 </div>
                 
-                {/* Review Info - if approved or rejected */}
                 {qrStatus !== 'pending' && (
                   <>
                     <div>
@@ -1374,7 +1429,6 @@ function OrderDetailsModal({ order, onClose, formatCurrency, formatDate, statusC
                   </>
                 )}
                 
-                {/* Screenshot */}
                 {qrMetadata.screenshotUrl && (
                   <div className="col-span-2 mt-2">
                     <p className="text-gray-500 mb-1">Payment Screenshot</p>
@@ -1405,24 +1459,26 @@ function OrderDetailsModal({ order, onClose, formatCurrency, formatDate, statusC
 
           {/* Order Timeline */}
           {order.statusHistory && order.statusHistory.length > 0 && (
+  <div>
+    <h3 className="font-semibold text-gray-700 mb-2">Order Timeline</h3>
+    <div className="space-y-2">
+      {getUniqueStatusHistory(order.statusHistory)
+        .slice()
+        .reverse()
+        .map((history, idx) => (
+          <div key={idx} className="flex items-start gap-3 text-sm">
+            <div className="w-2 h-2 mt-1.5 rounded-full bg-indigo-500 shrink-0"></div>
             <div>
-              <h3 className="font-semibold text-gray-700 mb-2">Order Timeline</h3>
-              <div className="space-y-2">
-                {order.statusHistory.slice().reverse().map((history, idx) => (
-                  <div key={idx} className="flex items-start gap-3 text-sm">
-                    <div className="w-2 h-2 mt-1.5 rounded-full bg-indigo-500 shrink-0"></div>
-                    <div>
-                      <p className="font-medium">{history.status}</p>
-                      <p className="text-gray-500 text-xs">{formatDate(history.date)}</p>
-                      {history.note && <p className="text-gray-400 text-xs">{history.note}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <p className="font-medium">{history.status}</p>
+              <p className="text-gray-500 text-xs">{formatDate(history.date)}</p>
+              {history.note && <p className="text-gray-400 text-xs">{history.note}</p>}
             </div>
-          )}
+          </div>
+        ))}
+    </div>
+  </div>
+)}
 
-          {/* Customer Note */}
           {order.customerNote && (
             <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
               <h3 className="font-semibold text-gray-700 mb-1">Customer Note</h3>
@@ -1579,16 +1635,14 @@ function DeleteConfirmModal({ onClose, onConfirm, orderId }) {
 }
 
 // ============================================
-// QR VERIFICATION MODAL
+// QR VERIFICATION MODAL - UPDATED ✅
 // ============================================
-
-// src/pages/admin/AdminOrderManagement.jsx - QRVerificationModal
 
 function QRVerificationModal({ 
   order, 
   onClose, 
   onVerify, 
-  onReopen, // ✅ NEW
+  onReopen,
   loading, 
   screenshotUrl,
   rejectionReason,
@@ -1598,22 +1652,29 @@ function QRVerificationModal({
 }) {
   const qrMetadata = order.paymentMetadata?.qrVerification || order.paymentMetadata?.qrPayment || {};
   const [decision, setDecision] = useState('');
-  const isRejected = order.paymentStatus === 'Failed';
+  const isRejected = order.paymentStatus === 'Failed' || order.paymentStatus === 'Rejected';
+  const isVerified = order.paymentStatus === 'Paid' || order.paymentStatus === 'Verified';
+  const isPending = order.paymentStatus === 'Pending' || order.paymentStatus === 'Initiated';
+  
+  const getQRStatus = () => {
+    if (isVerified) return { label: 'Verified', color: 'bg-green-100 text-green-800', icon: '✅' };
+    if (isRejected) return { label: 'Rejected', color: 'bg-red-100 text-red-800', icon: '❌' };
+    if (isPending) return { label: 'Pending Review', color: 'bg-yellow-100 text-yellow-800', icon: '⏳' };
+    return { label: 'Unknown', color: 'bg-gray-100 text-gray-800', icon: '❓' };
+  };
+  
+  const qrStatus = getQRStatus();
   
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Modal Header - Show different status if rejected */}
+        {/* Modal Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <QrCodeIcon className="h-6 w-6 text-yellow-600" />
             QR Payment Verification
-            <span className={`text-sm font-normal px-2 py-0.5 rounded-full ${
-              isRejected 
-                ? 'bg-red-100 text-red-800' 
-                : 'bg-yellow-100 text-yellow-800'
-            }`}>
-              {isRejected ? 'Rejected' : 'Pending Review'}
+            <span className={`text-sm font-normal px-2 py-0.5 rounded-full ${qrStatus.color}`}>
+              {qrStatus.icon} {qrStatus.label}
             </span>
           </h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
@@ -1622,16 +1683,91 @@ function QRVerificationModal({
         </div>
         
         <div className="p-6 space-y-6">
-          {/* ... existing order info ... */}
+          {/* Order Info */}
+          <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-xl p-4">
+            <div>
+              <p className="text-sm text-gray-500">Order Number</p>
+              <p className="font-semibold">{order.orderNumber}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Customer</p>
+              <p className="font-semibold">{order.userName || order.shippingAddress?.fullName || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Amount</p>
+              <p className="font-semibold">{formatCurrency(order.total)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Date</p>
+              <p className="font-semibold">{formatDate(order.createdAt)}</p>
+            </div>
+          </div>
 
-          {/* Admin Decision - Show different options for rejected orders */}
+          {/* QR Payment Details */}
+          <div className="border border-gray-200 rounded-xl p-4">
+            <h3 className="font-semibold text-gray-700 mb-3">Payment Details</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="col-span-2">
+                <p className="text-gray-500">Transaction ID</p>
+                <p className="font-medium">{qrMetadata.transactionId || order.transactionId || 'N/A'}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-gray-500">UPI Reference Number</p>
+                <p className="font-medium">{qrMetadata.upiReferenceNumber || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Amount Paid</p>
+                <p className="font-medium">{formatCurrency(qrMetadata.amount || order.total)}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Payment Date</p>
+                <p className="font-medium">{qrMetadata.paymentDate || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Payment Time</p>
+                <p className="font-medium">{qrMetadata.paymentTime || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Bank Name</p>
+                <p className="font-medium">{qrMetadata.bankName || 'Not provided'}</p>
+              </div>
+              
+              {/* Screenshot */}
+              {screenshotUrl && (
+                <div className="col-span-2 mt-2">
+                  <p className="text-gray-500 mb-1">Payment Screenshot</p>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden max-h-64">
+                    <img 
+                      src={screenshotUrl} 
+                      alt="Payment Screenshot" 
+                      className="w-full object-contain max-h-64"
+                      onError={(e) => {
+                        console.error('❌ Screenshot failed to load:', screenshotUrl);
+                        e.target.src = 'https://placehold.co/600x400/f0f0f0/999?text=Screenshot+Not+Available';
+                      }}
+                    />
+                  </div>
+                  <a 
+                    href={screenshotUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mt-2 text-sm"
+                  >
+                    <PhotoIcon className="h-4 w-4" />
+                    View Full Size
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Admin Decision Section */}
           <div className="border-t border-gray-200 pt-4">
             <h3 className="font-semibold text-gray-700 mb-3">
-              {isRejected ? 'Reopened Order' : 'Admin Decision'}
+              {isRejected ? 'Rejected Order' : isVerified ? 'Already Verified' : 'Admin Decision'}
             </h3>
             
-            {isRejected ? (
-              // Show Reopen button for rejected orders
+            {isRejected && (
               <div>
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                   <p className="text-sm text-red-700 flex items-center gap-2">
@@ -1655,12 +1791,25 @@ function QRVerificationModal({
                       Processing...
                     </span>
                   ) : (
-                    'Reopen for Verification'
+                    '🔄 Reopen for Verification'
                   )}
                 </button>
               </div>
-            ) : (
-              // Show Approve/Reject for pending orders
+            )}
+
+            {isVerified && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-sm text-green-700 flex items-center gap-2">
+                  <CheckIcon className="h-5 w-5" />
+                  This payment has already been verified and approved.
+                </p>
+                {qrMetadata.adminNote && (
+                  <p className="text-sm text-green-600 mt-1">Note: {qrMetadata.adminNote}</p>
+                )}
+              </div>
+            )}
+
+            {isPending && (
               <>
                 <div className="flex gap-4 mb-4">
                   <button
@@ -1712,7 +1861,6 @@ function QRVerificationModal({
                   </div>
                 )}
 
-                {/* Action Buttons for Pending */}
                 <div className="flex gap-3 pt-2 border-t border-gray-200 mt-4">
                   <button
                     onClick={onClose}
@@ -1750,7 +1898,7 @@ function QRVerificationModal({
                         Processing...
                       </span>
                     ) : (
-                      decision === 'approve' ? 'Approve & Confirm Payment' : 'Reject Payment'
+                      decision === 'approve' ? '✅ Approve & Confirm Payment' : '❌ Reject Payment'
                     )}
                   </button>
                 </div>

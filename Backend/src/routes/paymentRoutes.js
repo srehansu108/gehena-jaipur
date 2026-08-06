@@ -65,11 +65,33 @@ router.post('/qr/init', authenticate, paymentController.initQRPayment);
 router.post('/qr/verify', authenticate, upload.single('screenshot'), paymentController.verifyQRPayment);
 
 // ============================================
-// QR CODE ADMIN ROUTES ✅ - NEW
+// ✅ QR CODE ADMIN ROUTES - MATCHING FRONTEND
 // ============================================
-router.put('/admin/:orderId/qr-verify', authenticate, paymentController.adminVerifyQRPayment);
-router.put('/admin/:orderId/qr-reject', authenticate, paymentController.adminRejectQRPayment);
-router.put('/admin/:orderId/qr-reopen', authenticate, paymentController.adminReopenQRPayment);
+router.put(
+  '/qr/approve/:orderId',
+  authenticate,
+  paymentController.adminVerifyQRPayment
+);
+
+router.put(
+  '/qr/reject/:orderId',
+  authenticate,
+  paymentController.adminRejectQRPayment
+);
+
+router.put(
+  '/qr/reopen/:orderId',
+  authenticate,
+  paymentController.adminReopenQRPayment
+);
+
+// Get pending QR payments
+router.get(
+  '/qr/pending',
+  authenticate,
+  paymentController.getPendingQRPayments
+);
+
 // ============================================
 // COD ROUTE
 // ============================================
@@ -99,5 +121,21 @@ router.get('/screenshot/:filename', (req, res) => {
     res.status(404).json({ success: false, message: 'File not found' });
   }
 });
+
+console.log('✅ Payment Routes registered:');
+console.log('   - POST /phonepe/init');
+console.log('   - POST /phonepe/callback');
+console.log('   - POST /razorpay/init');
+console.log('   - POST /razorpay/verify');
+console.log('   - POST /qr/init');
+console.log('   - POST /qr/verify');
+console.log('   - PUT /qr/approve/:orderId ✅');
+console.log('   - PUT /qr/reject/:orderId ✅');
+console.log('   - PUT /qr/reopen/:orderId ✅');
+console.log('   - GET /qr/pending ✅');
+console.log('   - POST /cod/confirm');
+console.log('   - GET /status/:orderId');
+console.log('   - GET /order/:id');
+console.log('   - GET /screenshot/:filename');
 
 module.exports = router;

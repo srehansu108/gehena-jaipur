@@ -24,6 +24,16 @@ import {
   getCSVTemplate
 } from '../services/api';
 
+// ✅ ADD THIS IMPORT - or use a simple alert fallback
+// Option 1: If you have react-hot-toast installed
+import toast from 'react-hot-toast';
+
+// Option 2: If you don't have it, create a simple toast fallback
+// const toast = {
+//   success: (msg) => alert('✅ ' + msg),
+//   error: (msg) => alert('❌ ' + msg),
+// };
+
 export default function AdminProducts() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +54,8 @@ export default function AdminProducts() {
   const [importData, setImportData] = useState('');
   const [importFormat, setImportFormat] = useState('csv');
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -95,6 +107,7 @@ export default function AdminProducts() {
       }
     } catch (error) {
       console.error('Error fetching products:', error);
+      toast?.error('Failed to fetch products');
     } finally {
       setLoading(false);
     }
@@ -133,11 +146,11 @@ export default function AdminProducts() {
         setShowAddModal(false);
         resetForm();
         fetchProducts(pagination.page, searchTerm, selectedCategory);
-        alert('Product created successfully!');
+        toast?.success('Product created successfully!');
       }
     } catch (error) {
       console.error('Error creating product:', error);
-      alert('Failed to create product. Please try again.');
+      toast?.error('Failed to create product. Please try again.');
     }
   };
 
@@ -160,11 +173,11 @@ export default function AdminProducts() {
         setShowEditModal(false);
         resetForm();
         fetchProducts(pagination.page, searchTerm, selectedCategory);
-        alert('Product updated successfully!');
+        toast?.success('Product updated successfully!');
       }
     } catch (error) {
       console.error('Error updating product:', error);
-      alert('Failed to update product. Please try again.');
+      toast?.error('Failed to update product. Please try again.');
     }
   };
 
@@ -176,11 +189,11 @@ export default function AdminProducts() {
       const response = await deleteProduct(productId);
       if (response.success) {
         fetchProducts(pagination.page, searchTerm, selectedCategory);
-        alert('Product deleted successfully!');
+        toast?.success('Product deleted successfully!');
       }
     } catch (error) {
       console.error('Error deleting product:', error);
-      alert('Failed to delete product. Please try again.');
+      toast?.error('Failed to delete product. Please try again.');
     }
   };
 
@@ -228,7 +241,7 @@ export default function AdminProducts() {
   // ✅ BULK IMPORT HANDLERS
   const handleImport = async () => {
     if (!importData.trim()) {
-      alert('Please paste product data or upload a file');
+      toast?.error('Please paste product data or upload a file');
       return;
     }
 
@@ -256,14 +269,14 @@ export default function AdminProducts() {
           const jsonData = JSON.parse(importData);
           products = Array.isArray(jsonData) ? jsonData : jsonData.data || [jsonData];
         } catch (e) {
-          alert('Invalid JSON format. Please check your data.');
+          toast?.error('Invalid JSON format. Please check your data.');
           setImporting(false);
           return;
         }
       }
 
       if (products.length === 0) {
-        alert('No valid products found in the data');
+        toast?.error('No valid products found in the data');
         setImporting(false);
         return;
       }
@@ -279,6 +292,7 @@ export default function AdminProducts() {
 
       if (response.success) {
         fetchProducts(1, searchTerm, selectedCategory);
+        toast?.success(`${response.data?.inserted || 0} products imported successfully!`);
         setTimeout(() => {
           setShowImportModal(false);
           setImportData('');
@@ -292,6 +306,7 @@ export default function AdminProducts() {
         message: error.response?.data?.message || 'Import failed',
         error: error.message
       });
+      toast?.error('Import failed. Please check your data.');
     } finally {
       setImporting(false);
     }
@@ -308,40 +323,85 @@ export default function AdminProducts() {
     reader.readAsText(file);
   };
 
-  // ✅ EXPORT HANDLERS
+  // ✅ ============ FIXED EXPORT HANDLERS ============
+  
   const handleExportCSV = async () => {
     try {
-      const blob = await exportProductsCSV({ category: selectedCategory });
+      setExporting(true);
+      console.log('📤 Exporting CSV...');
+      
+      const blob = await exportProductsCSV({ 
+        category: selectedCategory,
+        search: searchTerm 
+      });
+      
+      // ✅ Check if blob is valid
+      if (!blob || blob.size === 0) {
+        toast?.error('No data to export');
+        setExporting(false);
+        return;
+      }
+      
+      console.log('📦 Blob size:', blob.size);
+      
+      // ✅ Create download link
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `products_${Date.now()}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `products_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // ✅ Clean up
+      setTimeout(() => window.URL.revokeObjectURL(url), 100);
+      
+      toast?.success('Products exported as CSV successfully!');
     } catch (error) {
-      console.error('Export error:', error);
-      alert('Failed to export products as CSV');
+      console.error('❌ Export error:', error);
+      toast?.error(error.response?.data?.message || 'Failed to export products as CSV');
+    } finally {
+      setExporting(false);
     }
   };
 
   const handleExportJSON = async () => {
     try {
-      const response = await exportProductsJSON({ category: selectedCategory });
-      const dataStr = JSON.stringify(response, null, 2);
-      const blob = new Blob([dataStr], { type: 'application/json' });
+      setExporting(true);
+      console.log('📤 Exporting JSON...');
+      
+      const blob = await exportProductsJSON({ 
+        category: selectedCategory,
+        search: searchTerm 
+      });
+      
+      // ✅ Check if blob is valid
+      if (!blob || blob.size === 0) {
+        toast?.error('No data to export');
+        setExporting(false);
+        return;
+      }
+      
+      console.log('📦 Blob size:', blob.size);
+      
+      // ✅ Create download link
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `products_${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `products_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // ✅ Clean up
+      setTimeout(() => window.URL.revokeObjectURL(url), 100);
+      
+      toast?.success('Products exported as JSON successfully!');
     } catch (error) {
-      console.error('Export error:', error);
-      alert('Failed to export products as JSON');
+      console.error('❌ Export error:', error);
+      toast?.error(error.response?.data?.message || 'Failed to export products as JSON');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -356,11 +416,15 @@ export default function AdminProducts() {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
+      toast?.success('Template downloaded successfully!');
     } catch (error) {
       console.error('Template download error:', error);
-      alert('Failed to download template');
+      toast?.error('Failed to download template');
     }
   };
+
+  // Rest of your component remains the same...
+  // (The JSX and modal parts are unchanged)
 
   if (loading && products.length === 0) {
     return (
@@ -387,40 +451,58 @@ export default function AdminProducts() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {/* Import/Export Dropdown */}
-          <div className="relative group">
-            <button
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-              onClick={() => setShowImportModal(true)}
-            >
-              <ArrowUpTrayIcon className="h-5 w-5" />
-              Import
-            </button>
-          </div>
+          {/* Import Button */}
+          <button
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+            onClick={() => setShowImportModal(true)}
+          >
+            <ArrowUpTrayIcon className="h-5 w-5" />
+            Import
+          </button>
           
-          <div className="relative group">
+          {/* ✅ FIXED Export Dropdown */}
+          <div className="relative">
             <button
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              disabled={exporting}
+              onClick={() => setShowExportDropdown(!showExportDropdown)}
             >
-              <ArrowDownTrayIcon className="h-5 w-5" />
-              Export
+              {exporting ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+              ) : (
+                <ArrowDownTrayIcon className="h-5 w-5" />
+              )}
+              {exporting ? 'Exporting...' : 'Export'}
             </button>
-            <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-200 hidden group-hover:block z-10">
-              <button
-                onClick={handleExportCSV}
-                className="w-full text-left px-4 py-2 hover:bg-slate-50 rounded-t-lg text-sm"
-              >
-                📊 Export as CSV
-              </button>
-              <button
-                onClick={handleExportJSON}
-                className="w-full text-left px-4 py-2 hover:bg-slate-50 rounded-b-lg text-sm"
-              >
-                📄 Export as JSON
-              </button>
-            </div>
+            
+            {/* ✅ FIXED Dropdown Menu - Using state instead of group-hover */}
+            {showExportDropdown && !exporting && (
+              <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-10 overflow-hidden">
+                <button
+                  onClick={() => {
+                    setShowExportDropdown(false);
+                    handleExportCSV();
+                  }}
+                  disabled={exporting}
+                  className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <span>📊</span> Export as CSV
+                </button>
+                <button
+                  onClick={() => {
+                    setShowExportDropdown(false);
+                    handleExportJSON();
+                  }}
+                  disabled={exporting}
+                  className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 border-t border-slate-100"
+                >
+                  <span>📄</span> Export as JSON
+                </button>
+              </div>
+            )}
           </div>
 
+          {/* Add Product Button */}
           <button
             onClick={() => {
               resetForm();
@@ -463,7 +545,7 @@ export default function AdminProducts() {
         </div>
       </div>
 
-      {/* Products Grid */}
+      {/* Products Grid - Keep your existing grid code */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {products.map((product) => (
           <div
@@ -717,7 +799,6 @@ export default function AdminProducts() {
       )}
 
       {/* ============ ADD/EDIT MODALS ============ */}
-      {/* Add/Edit modal code remains the same as before */}
       {showAddModal && (
         <ProductModal
           title="Add New Product"

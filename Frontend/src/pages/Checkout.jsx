@@ -325,18 +325,36 @@ const handleVerificationSubmit = async () => {
   try {
     // Create form data for API request
     const formData = new FormData();
+    formData.append('orderId', qrOrderId || createdOrder?._id);
     formData.append('transactionId', verificationData.transactionId);
     formData.append('upiReferenceNumber', verificationData.upiReferenceNumber);
     formData.append('paymentDate', verificationData.paymentDate);
     formData.append('paymentTime', verificationData.paymentTime);
     formData.append('amount', verificationData.amount);
     formData.append('bankName', verificationData.bankName);
-    formData.append('orderId', qrOrderId || createdOrder?._id);
+    
+    // ✅ CRITICAL: Append the screenshot file
     if (screenshotFile) {
-      formData.append('screenshot', screenshotFile);
+      formData.append('screenshot', screenshotFile, screenshotFile.name);
+      console.log('📸 Screenshot file appended:', screenshotFile.name, screenshotFile.size, 'bytes');
+    } else {
+      console.error('❌ No screenshot file found!');
+      toast.error('Please upload a screenshot');
+      setIsSubmittingVerification(false);
+      return;
     }
 
-    // Call the verification API - this will submit for admin review
+    // ✅ Log all FormData entries for debugging
+    console.log('📦 FormData contents:');
+    for (let [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`  ${key}: [File] ${value.name} (${value.size} bytes, ${value.type})`);
+      } else {
+        console.log(`  ${key}: ${value}`);
+      }
+    }
+
+    // Call the verification API
     const response = await paymentService.verifyQRPayment(formData);
     
     toast.dismiss();
@@ -344,14 +362,11 @@ const handleVerificationSubmit = async () => {
     if (response.success) {
       toast.success('Payment details submitted! Waiting for admin verification. 📋');
       
-      // Close QR modal and show pending state
       setShowQRCode(false);
       setShowVerificationForm(false);
       
-      // Update order status to show pending verification
       const orderResponse = await checkoutService.getOrderById(qrOrderId || createdOrder?._id);
       if (orderResponse.success) {
-        // Show a pending verification message instead of completing order
         setCreatedOrder({
           ...orderResponse.data,
           paymentStatus: 'Pending Verification'

@@ -70,7 +70,7 @@ const orderSchema = new mongoose.Schema({
     default: 0,
   },
   
-  // ✅ Tax breakdown for detailed invoice
+  // Tax breakdown for detailed invoice
   taxBreakdown: {
     type: {
       type: String,
@@ -121,7 +121,7 @@ const orderSchema = new mongoose.Schema({
     required: true,
   },
   
-  // ✅ Payment Details - UPDATED with all payment gateways
+  // Payment Details
   paymentMethod: {
     type: String,
     enum: ['COD', 'Card', 'UPI', 'NetBanking', 'Wallet', 'Razorpay', 'Stripe', 'PhonePe', 'QR'],
@@ -135,7 +135,7 @@ const orderSchema = new mongoose.Schema({
   transactionId: String,
   paymentDate: Date,
   
-  // ✅ NEW: Payment gateway specific fields
+  // Payment gateway specific fields
   paymentGateway: {
     type: String,
     enum: ['razorpay', 'phonepe', 'stripe', 'cod', 'qr', null],
@@ -257,20 +257,45 @@ orderSchema.virtual('isPaymentDue').get(function() {
 // ========== PRE-SAVE MIDDLEWARE ==========
 orderSchema.pre('save', function(next) {
   this.updatedAt = new Date();
-  
-  // Update order status history
-  if (this.isModified('status')) {
-    this.statusHistory.push({
-      status: this.status,
-      date: new Date(),
-      note: `Order status changed to ${this.status}`,
-    });
-  }
-  
+  // ✅ Removed automatic status history to prevent duplicates
   next();
 });
 
-// Generate order number
+// ========== HELPER: Add Status History Without Duplicates ==========
+orderSchema.methods.addStatusHistory = function(status, note, updatedBy = 'System') {
+  // Check if the last entry has the same status
+  const lastEntry = this.statusHistory[this.statusHistory.length - 1];
+  
+  // If last entry has same status, skip adding duplicate
+  if (lastEntry && lastEntry.status === status) {
+    // If same status and same note, skip entirely
+    if (lastEntry.note === note) {
+      return this;
+    }
+    // If same status but different note, update the existing one
+    if (lastEntry.note !== note) {
+      lastEntry.date = new Date();
+      lastEntry.note = note;
+      lastEntry.updatedBy = updatedBy;
+      return this;
+    }
+  }
+  
+  // Add new entry
+  this.statusHistory.push({
+    status: status,
+    date: new Date(),
+    note: note || `Order status changed to ${status}`,
+    updatedBy: updatedBy || 'System'
+  });
+  
+  // Update the main status field
+  this.status = status;
+  
+  return this;
+};
+
+// ========== GENERATE ORDER NUMBER ==========
 orderSchema.pre('validate', function(next) {
   if (!this.orderNumber) {
     const date = new Date();

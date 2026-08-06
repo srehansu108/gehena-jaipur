@@ -42,7 +42,7 @@ class OrderController {
         shippingCharges,
         total,
         shippingMethod,
-        taxBreakdown, // ✅ NEW: Receive tax breakdown from frontend
+        taxBreakdown,
       } = req.body;
 
       const userId = req.userId;
@@ -108,19 +108,17 @@ class OrderController {
         }
       }
 
-      // ✅ Validate and structure tax breakdown
+      // Validate and structure tax breakdown
       let validatedTaxBreakdown = { type: 'none', total: 0, rate: 0 };
       
       if (taxBreakdown) {
         const validTypes = ['cgst_sgst', 'igst', 'none'];
         if (validTypes.includes(taxBreakdown.type)) {
-          // For CGST/SGST
           if (taxBreakdown.type === 'cgst_sgst') {
             const cgst = taxBreakdown.cgst || 0;
             const sgst = taxBreakdown.sgst || 0;
             const totalTax = cgst + sgst;
             
-            // Verify the tax amount matches
             if (Math.abs(totalTax - (taxBreakdown.total || tax || 0)) > 1) {
               console.warn('⚠️ Tax breakdown mismatch:', {
                 cgst,
@@ -140,12 +138,9 @@ class OrderController {
               label: taxBreakdown.label || `CGST (1.5%) + SGST (1.5%)`,
               description: taxBreakdown.description || 'Intra-state transaction'
             };
-          } 
-          // For IGST
-          else if (taxBreakdown.type === 'igst') {
+          } else if (taxBreakdown.type === 'igst') {
             const igst = taxBreakdown.igst || 0;
             
-            // Verify the tax amount matches
             if (Math.abs(igst - (taxBreakdown.total || tax || 0)) > 1) {
               console.warn('⚠️ Tax breakdown mismatch:', {
                 igst,
@@ -163,9 +158,7 @@ class OrderController {
               label: taxBreakdown.label || `IGST (3.0%)`,
               description: taxBreakdown.description || 'Inter-state transaction'
             };
-          } 
-          // No tax
-          else if (taxBreakdown.type === 'none') {
+          } else if (taxBreakdown.type === 'none') {
             validatedTaxBreakdown = {
               type: 'none',
               cgst: 0,
@@ -181,7 +174,6 @@ class OrderController {
           console.warn('⚠️ Invalid tax breakdown type:', taxBreakdown.type);
         }
       } else {
-        // Fallback: If no tax breakdown provided, create from tax amount
         const taxAmount = tax || 0;
         const shippingState = shippingAddress?.state?.toLowerCase();
         
@@ -216,14 +208,12 @@ class OrderController {
 
       console.log('✅ Validated tax breakdown:', validatedTaxBreakdown);
 
-      // Use provided totals or calculate
       const finalSubtotal = subtotal || calculatedSubtotal;
       const finalDiscount = discount || 0;
       const finalTax = tax || validatedTaxBreakdown.total || 0;
       const finalShipping = shippingCharges || 0;
       const finalTotal = total || (finalSubtotal - finalDiscount + finalTax + finalShipping);
 
-      // Create order
       const orderNumber = await generateOrderNumber();
 
       const order = new Order({
@@ -235,7 +225,7 @@ class OrderController {
         subtotal: finalSubtotal,
         discount: finalDiscount,
         tax: finalTax,
-        taxBreakdown: validatedTaxBreakdown, // ✅ Store tax breakdown
+        taxBreakdown: validatedTaxBreakdown,
         shippingCharges: finalShipping,
         total: finalTotal,
         paymentMethod: paymentMethod || 'Card',
@@ -258,13 +248,14 @@ class OrderController {
         couponCode: couponCode || '',
         couponDiscount: finalDiscount > 0 ? finalDiscount : 0,
         customerNote: customerNote || '',
-        statusHistory: [{
-          status: 'Processing',
-          date: new Date(),
-          note: 'Order placed and payment confirmed',
-          updatedBy: 'System'
-        }]
       });
+
+      // ✅ Use the helper method to add status history
+      order.addStatusHistory(
+        'Processing',
+        '✅ Order placed and payment confirmed',
+        'System'
+      );
 
       await order.save();
 
@@ -363,7 +354,6 @@ class OrderController {
 
       console.log('📊 Found orders:', orders.length);
 
-      // ✅ Safe stats calculation with error handling
       let stats = {
         total: 0,
         pending: 0,
@@ -537,14 +527,14 @@ class OrderController {
         });
       }
 
-      order.status = status;
-      order.shippingStatus = status;
-      order.statusHistory.push({
+      // ✅ Use the helper method
+      order.addStatusHistory(
         status,
-        date: new Date(),
-        note: note || `Order status updated to ${status}`,
-        updatedBy: req.user?.email || 'Admin'
-      });
+        note || `Order status updated to ${status}`,
+        req.user?.email || 'Admin'
+      );
+
+      order.shippingStatus = status;
 
       if (status === 'Delivered') {
         order.deliveredAt = new Date();
@@ -663,14 +653,13 @@ class OrderController {
         });
       }
 
-      order.status = 'Cancelled';
+      // ✅ Use the helper method
+      order.addStatusHistory(
+        'Cancelled',
+        reason || 'Cancelled by user',
+        'User'
+      );
       order.cancelledAt = new Date();
-      order.statusHistory.push({
-        status: 'Cancelled',
-        date: new Date(),
-        note: reason || 'Cancelled by user',
-        updatedBy: 'User'
-      });
       await order.save();
 
       res.json({
@@ -744,13 +733,14 @@ class OrderController {
 
       order.trackingNumber = trackingNumber;
       order.shippingStatus = 'Shipped';
-      order.status = 'Shipped';
-      order.statusHistory.push({
-        status: 'Shipped',
-        date: new Date(),
-        note: `Shipped with tracking: ${trackingNumber}`,
-        updatedBy: 'Admin'
-      });
+      
+      // ✅ Use the helper method
+      order.addStatusHistory(
+        'Shipped',
+        `Shipped with tracking: ${trackingNumber}`,
+        'Admin'
+      );
+      
       await order.save();
 
       res.json({
@@ -832,7 +822,6 @@ class OrderController {
         { $sort: { revenue: -1 } }
       ]);
 
-      // ✅ Get tax breakdown analytics
       const taxAnalytics = await Order.aggregate([
         {
           $match: {
@@ -854,7 +843,7 @@ class OrderController {
         data: {
           timeline: revenueData,
           categoryBreakdown: categoryRevenue,
-          taxBreakdown: taxAnalytics, // ✅ Added tax analytics
+          taxBreakdown: taxAnalytics,
           summary: {
             totalRevenue: revenueData.reduce((sum, d) => sum + d.revenue, 0),
             totalOrders: revenueData.reduce((sum, d) => sum + d.orders, 0),
@@ -902,7 +891,6 @@ class OrderController {
         });
       }
 
-      // Format invoice data
       const invoice = {
         invoiceNumber: `INV-${order.orderNumber}`,
         orderNumber: order.orderNumber,
@@ -922,7 +910,7 @@ class OrderController {
         subtotal: order.subtotal,
         discount: order.discount,
         tax: order.tax,
-        taxBreakdown: order.taxBreakdown, // ✅ Include tax breakdown
+        taxBreakdown: order.taxBreakdown,
         shippingCharges: order.shippingCharges,
         total: order.total,
         paymentMethod: order.paymentMethod,
@@ -945,6 +933,7 @@ class OrderController {
       });
     }
   }
+
   /**
    * Get order by ID with payment details
    */
@@ -972,17 +961,14 @@ class OrderController {
         });
       }
 
-      // Return enhanced order with payment details
       const enhancedOrder = order.toJSON();
       
-      // Check if payment is completed
       if (order.paymentStatus === 'Paid' || order.paymentStatus === 'COD') {
         enhancedOrder.paymentCompleted = true;
       } else {
         enhancedOrder.paymentCompleted = false;
       }
 
-      // Determine if payment is due
       if (['Pending', 'Initiated', 'Failed'].includes(order.paymentStatus)) {
         enhancedOrder.paymentDue = true;
       } else {
@@ -1005,5 +991,4 @@ class OrderController {
   }
 }
 
-// ✅ Export a SINGLE instance
 module.exports = new OrderController();
