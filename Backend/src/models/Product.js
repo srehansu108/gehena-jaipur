@@ -110,6 +110,10 @@ const productSchema = new mongoose.Schema({
     min: 0,
     max: 100,
   },
+  isBestseller:    { type: Boolean, default: false, index: true },
+bestsellerOrder: { type: Number, default: 0 },
+isNewArrival:    { type: Boolean, default: false, index: true },
+newArrivalOrder: { type: Number, default: 0 },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -132,6 +136,8 @@ productSchema.index({ category: 1, rating: 1 });
 productSchema.index({ metal: 1, price: 1 });
 productSchema.index({ tags: 1, inStock: 1 });
 productSchema.index({ name: 'text', description: 'text', 'tags': 'text' });
+productSchema.index({ isBestseller: 1, bestsellerOrder: 1 });
+productSchema.index({ isNewArrival: 1, newArrivalOrder: 1 });
 
 // 🔥 NEW: Index for navbar category filtering
 productSchema.index({ navbarCategory: 1, navbarSubcategory: 1 });

@@ -1,901 +1,903 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+// client/src/pages/Boutique/JewelleryBoutique.jsx
+// Story-driven boutique home page for Gehena Jaipur — PINK ATELIER edition
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 
 const JewelleryBoutique = () => {
-  const [cart, setCart] = useState([]);
-  const [activeCategory, setActiveCategory] = useState('All');
-  const [hoveredProduct, setHoveredProduct] = useState(null);
-  const [scrolled, setScrolled] = useState(false);
-  const [sparkles, setSparkles] = useState([]);
+  const [chapter, setChapter] = useState(0);
+  const [cursor, setCursor] = useState({ x: 0, y: 0 });
+  const heroRef = useRef(null);
+  const chapterRefs = useRef([]);
 
-  // Generate sparkles on scroll
+  // ─── Hero parallax on scroll ───
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ['start start', 'end start'],
+  });
+  const heroScale = useTransform(scrollYProgress, [0, 1], [1, 1.15]);
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.85], [1, 0]);
+  const heroY = useTransform(scrollYProgress, [0, 1], [0, 150]);
+
+  // ─── Cursor follow for ACT IV ───
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 100);
-    };
-    window.addEventListener('scroll', handleScroll);
-    
-    // Create sparkle particles
-    const sparkleArray = Array.from({ length: 20 }, (_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 6 + 2,
-      duration: Math.random() * 3 + 2,
-      delay: Math.random() * 2
-    }));
-    setSparkles(sparkleArray);
-    
-    return () => window.removeEventListener('scroll', handleScroll);
+    const onMove = (e) => setCursor({ x: e.clientX, y: e.clientY });
+    window.addEventListener('mousemove', onMove);
+    return () => window.removeEventListener('mousemove', onMove);
   }, []);
 
-  const products = [
-    {
-      id: 1,
-      name: "Rose Gold Necklace",
-      category: "Necklaces",
-      price: "$299",
-      originalPrice: "$399",
-      image: "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&h=400&fit=crop",
-      badge: "Bestseller",
-      badgeColor: "from-pink-500 to-pink-600",
-      description: "Elegant rose gold chain with a delicate crystal pendant. Perfect for everyday luxury and special occasions.",
-      rating: 4.9,
-      reviews: 128,
-      isNew: false,
-      isSale: false,
-      features: ["18k Rose Gold", "Crystal Pendant", "Adjustable Chain"]
-    },
-    {
-      id: 2,
-      name: "Pink Sapphire Ring",
-      category: "Rings",
-      price: "$499",
-      originalPrice: null,
-      image: "https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=400&h=400&fit=crop",
-      badge: "New",
-      badgeColor: "from-emerald-400 to-emerald-500",
-      description: "Stunning pink sapphire set in 18k white gold. A symbol of love, elegance, and timeless beauty.",
-      rating: 5.0,
-      reviews: 89,
-      isNew: true,
-      isSale: false,
-      features: ["Natural Sapphire", "18k White Gold", "Signature Design"]
-    },
-    {
-      id: 3,
-      name: "Pearl Drop Earrings",
-      category: "Earrings",
-      price: "$199",
-      originalPrice: null,
-      image: "https://images.unsplash.com/photo-1588444837495-c6cfeb53f32d?w=400&h=400&fit=crop",
-      badge: null,
-      badgeColor: "",
-      description: "Freshwater pearl drops with gold-plated hooks. Timeless elegance for any occasion.",
-      rating: 4.7,
-      reviews: 234,
-      isNew: false,
-      isSale: false,
-      features: ["Freshwater Pearls", "Gold Plated", "Lightweight"]
-    },
-    {
-      id: 4,
-      name: "Diamond Tennis Bracelet",
-      category: "Bracelets",
-      price: "$899",
-      originalPrice: "$1,199",
-      image: "https://images.unsplash.com/photo-1611652022419-a9419f74343d?w=400&h=400&fit=crop",
-      badge: "Luxury",
-      badgeColor: "from-yellow-400 to-amber-500",
-      description: "Certified diamond tennis bracelet in platinum. The ultimate statement piece for the discerning collector.",
-      rating: 4.8,
-      reviews: 67,
-      isNew: false,
-      isSale: true,
-      features: ["Certified Diamonds", "Platinum", "Lifetime Warranty"]
-    },
-    {
-      id: 5,
-      name: "Blush Pink Pendant",
-      category: "Necklaces",
-      price: "$349",
-      originalPrice: null,
-      image: "https://images.unsplash.com/photo-1583947215253-24b7f6a971b6?w=400&h=400&fit=crop",
-      badge: null,
-      badgeColor: "",
-      description: "Delicate blush pink crystal pendant on a fine silver chain. Subtle, sophisticated, and utterly charming.",
-      rating: 4.6,
-      reviews: 156,
-      isNew: false,
-      isSale: false,
-      features: ["Crystal Pendant", "Silver Chain", "Adjustable"]
-    },
-    {
-      id: 6,
-      name: "Gold Hoop Earrings",
-      category: "Earrings",
-      price: "$159",
-      originalPrice: "$229",
-      image: "https://images.unsplash.com/photo-1630019852942-f89202989a59?w=400&h=400&fit=crop",
-      badge: "Sale",
-      badgeColor: "from-red-400 to-red-500",
-      description: "Classic 14k gold hoop earrings with a modern twist. Lightweight, comfortable, and versatile.",
-      rating: 4.9,
-      reviews: 312,
-      isNew: false,
-      isSale: true,
-      features: ["14k Gold", "Lightweight", "Comfort Fit"]
-    }
-  ];
+  // ─── Track active chapter ───
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const idx = chapterRefs.current.indexOf(entry.target);
+            if (idx !== -1) setChapter(idx);
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+    chapterRefs.current.forEach((el) => el && observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
 
-  const categories = ['All', 'Necklaces', 'Rings', 'Earrings', 'Bracelets'];
-
-  const filteredProducts = activeCategory === 'All' 
-    ? products 
-    : products.filter(p => p.category === activeCategory);
-
-  // Animation variants
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.3
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        type: "spring",
-        stiffness: 100,
-        damping: 12
-      }
-    }
-  };
-
-  const floatVariants = {
-    animate: {
-      y: [0, -10, 0],
-      transition: {
-        duration: 3,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }
-    }
-  };
-
-  const pulseVariants = {
-    animate: {
-      scale: [1, 1.05, 1],
-      transition: {
-        duration: 2,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }
-    }
-  };
-
-  const handleAddToCart = (product) => {
-    setCart([...cart, product]);
-    
-    // Create floating notification
-    const notification = document.createElement('div');
-    notification.className = 'fixed top-4 right-4 z-50';
-    notification.innerHTML = `
-      <div class="bg-gradient-to-r from-pink-600 to-pink-400 text-white px-6 py-4 rounded-2xl shadow-2xl transform transition-all duration-500 flex items-center gap-3 animate-slide-in-right">
-        <span class="text-2xl">✨</span>
-        <div>
-          <p class="font-bold text-lg">Added to Wishlist!</p>
-          <p class="text-sm opacity-90">${product.name}</p>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-      notification.querySelector('div').style.transform = 'translateX(100px)';
-      notification.querySelector('div').style.opacity = '0';
-      setTimeout(() => notification.remove(), 500);
-    }, 3000);
-  };
+  // ─── Ambient particles (pink petals) ───
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 45 }, (_, i) => ({
+        id: i,
+        x: Math.random() * 100,
+        y: Math.random() * 100,
+        size: Math.random() * 8 + 3,
+        duration: Math.random() * 8 + 5,
+        delay: Math.random() * 5,
+        rotation: Math.random() * 360,
+      })),
+    []
+  );
 
   return (
-    <main className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 bg-gradient-to-b from-[#fff5f7] via-white to-[#fff5f7] min-h-screen overflow-hidden">
-      
-      {/* ===== Floating Sparkles ===== */}
-      {sparkles.map((sparkle) => (
-        <motion.div
-          key={sparkle.id}
-          className="absolute rounded-full bg-gradient-to-r from-pink-300 to-pink-500 opacity-30"
-          style={{
-            left: `${sparkle.x}%`,
-            top: `${sparkle.y}%`,
-            width: sparkle.size,
-            height: sparkle.size,
-          }}
-          animate={{
-            y: [0, -20, 0],
-            opacity: [0.3, 0.8, 0.3],
-          }}
-          transition={{
-            duration: sparkle.duration,
-            delay: sparkle.delay,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-      ))}
+    <div className="relative bg-[#fff5f7] text-[#3a1f2b] overflow-x-hidden">
 
-      {/* ===== Hero Section ===== */}
-      <motion.section 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-pink-50 via-pink-100 to-pink-200 p-8 md:p-16 mb-12 shadow-2xl"
-      >
-        {/* Animated Background Elements */}
-        <motion.div 
-          className="absolute top-0 right-0 w-96 h-96 bg-pink-300/20 rounded-full blur-3xl"
-          animate={{
-            scale: [1, 1.2, 1],
-            x: [0, -20, 0],
-            y: [0, 20, 0],
-          }}
-          transition={{
-            duration: 8,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div 
-          className="absolute bottom-0 left-0 w-72 h-72 bg-pink-400/10 rounded-full blur-2xl"
-          animate={{
-            scale: [1, 1.3, 1],
-            x: [0, 20, 0],
-            y: [0, -20, 0],
-          }}
-          transition={{
-            duration: 6,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: 1
-          }}
-        />
-        <motion.div 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-200/10 rounded-full blur-3xl"
-          animate={{
-            scale: [1, 1.5, 1],
-            opacity: [0.3, 0.6, 0.3],
-          }}
-          transition={{
-            duration: 10,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-
-        <div className="relative flex flex-col md:flex-row items-center justify-between gap-10">
-          <motion.div 
-            className="flex-1 text-center md:text-left z-10"
-            initial={{ x: -50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
+      {/* ═══════════════════════════════════════════
+          AMBIENT PETALS (fixed layer)
+      ═══════════════════════════════════════════ */}
+      <div className="pointer-events-none fixed inset-0 z-10">
+        {particles.map((p) => (
+          <motion.div
+            key={p.id}
+            className="absolute"
+            style={{
+              left: `${p.x}%`,
+              top: `${p.y}%`,
+              width: p.size,
+              height: p.size * 0.7,
+            }}
+            animate={{
+              y: [0, -80, 0],
+              x: [0, Math.random() * 40 - 20, 0],
+              opacity: [0, 0.7, 0],
+              rotate: [p.rotation, p.rotation + 180, p.rotation + 360],
+            }}
+            transition={{
+              duration: p.duration,
+              delay: p.delay,
+              repeat: Infinity,
+              ease: 'easeInOut',
+            }}
           >
-            <motion.div 
-              className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm px-6 py-2 rounded-full text-sm font-semibold text-pink-600 mb-6 shadow-lg"
-              animate={{
-                scale: [1, 1.05, 1],
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
+            {/* Petal shape — soft pink gradient */}
+            <div
+              className="w-full h-full rounded-full bg-gradient-to-br from-pink-300 via-rose-300 to-pink-400"
+              style={{ borderRadius: '50% 0 50% 50%' }}
+            />
+          </motion.div>
+        ))}
+      </div>
+
+      {/* ═══════════════════════════════════════════
+          CHAPTER RAIL (right side)
+      ═══════════════════════════════════════════ */}
+      <div className="hidden lg:flex fixed right-6 top-1/2 -translate-y-1/2 z-40 flex-col items-end gap-4">
+        {['Threshold', 'Vault', 'Hand', 'Heirloom', 'Invitation'].map((name, i) => (
+          <button
+            key={name}
+            onClick={() => {
+              chapterRefs.current[i]?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="group flex items-center gap-3"
+          >
+            <span
+              className={`text-[10px] tracking-[0.3em] transition-all duration-500 ${
+                chapter === i
+                  ? 'text-pink-600 opacity-100 font-semibold'
+                  : 'text-pink-400/60 opacity-0 group-hover:opacity-100 group-hover:text-pink-500'
+              }`}
             >
-              <span className="animate-pulse">✦</span>
-              New Collection 2026
-              <span className="animate-pulse">✦</span>
+              {name.toUpperCase()}
+            </span>
+            <div className="flex items-center">
+              <div
+                className={`h-px transition-all duration-500 ${
+                  chapter === i ? 'w-12 bg-pink-600' : 'w-6 bg-pink-300 group-hover:w-10 group-hover:bg-pink-400'
+                }`}
+              />
+              <div
+                className={`ml-1 w-2 h-2 rounded-full transition-all duration-500 ${
+                  chapter === i ? 'bg-pink-600 scale-125' : 'bg-pink-300'
+                }`}
+              />
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* ═══════════════════════════════════════════
+          MINIMAL NAV
+      ═══════════════════════════════════════════ */}
+      <nav className="fixed top-0 inset-x-0 z-30 py-6 px-6 sm:px-10 flex items-center justify-between bg-gradient-to-b from-white/60 to-transparent backdrop-blur-[2px]">
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1 }}
+          className="flex items-baseline gap-2"
+        >
+          <span
+            className="text-xl tracking-[0.2em] font-light text-[#3a1f2b]"
+            style={{ fontFamily: 'Georgia, serif' }}
+          >
+            GEHENA
+          </span>
+          <span className="text-[10px] tracking-[0.4em] text-pink-600 font-semibold">
+            JAIPUR
+          </span>
+        </motion.div>
+
+        <motion.button
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1, delay: 0.2 }}
+          className="text-[11px] tracking-[0.3em] text-[#5a3d4a] hover:text-pink-600 transition-colors font-medium"
+        >
+          BOOK A VIEWING
+        </motion.button>
+      </nav>
+
+      {/* ═══════════════════════════════════════════
+          ACT I — THE THRESHOLD
+      ═══════════════════════════════════════════ */}
+      <section
+        ref={(el) => {
+          heroRef.current = el;
+          chapterRefs.current[0] = el;
+        }}
+        className="relative h-screen flex items-center justify-center overflow-hidden"
+      >
+        {/* Background layers */}
+        <motion.div
+          style={{ scale: heroScale, opacity: heroOpacity, y: heroY }}
+          className="absolute inset-0"
+        >
+          {/* Blush gradient base */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#fff5f7] via-[#fce7f0] to-[#f8d5e3]" />
+
+          {/* Soft radial glows */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(244,114,182,0.25)_0%,_transparent_55%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(251,207,232,0.35)_0%,_transparent_55%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.6)_0%,_transparent_70%)]" />
+
+          {/* Soft grid */}
+          <div
+            className="absolute inset-0 opacity-[0.05]"
+            style={{
+              backgroundImage:
+                'linear-gradient(rgba(219,39,119,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(219,39,119,0.4) 1px, transparent 1px)',
+              backgroundSize: '60px 60px',
+            }}
+          />
+
+          {/* Flowing blobs */}
+          <motion.div
+            className="absolute top-1/4 -left-32 w-96 h-96 bg-pink-300/40 rounded-full blur-3xl"
+            animate={{ scale: [1, 1.3, 1], x: [0, 40, 0], y: [0, -20, 0] }}
+            transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.div
+            className="absolute bottom-1/4 -right-32 w-96 h-96 bg-fuchsia-300/30 rounded-full blur-3xl"
+            animate={{ scale: [1, 1.2, 1], x: [0, -40, 0], y: [0, 20, 0] }}
+            transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+          />
+        </motion.div>
+
+        {/* Content */}
+        <div className="relative z-20 text-center px-6 max-w-4xl">
+          {/* Ornamental frame */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1.5, ease: 'easeOut' }}
+            className="mb-10"
+          >
+            <div className="inline-flex items-center gap-4">
+              <span className="w-20 h-px bg-gradient-to-r from-transparent via-pink-500/60 to-pink-500" />
+              <span className="text-pink-500 text-xl">✦</span>
+              <span className="w-20 h-px bg-gradient-to-l from-transparent via-pink-500/60 to-pink-500" />
+            </div>
+          </motion.div>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 0.5 }}
+            className="text-pink-600/90 text-xs tracking-[0.5em] mb-6 font-semibold"
+          >
+            YOU ARE INVITED TO ENTER
+          </motion.p>
+
+          <h1
+            className="text-6xl sm:text-7xl md:text-8xl lg:text-[10rem] leading-[0.9] font-light mb-8"
+            style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
+          >
+            <motion.span
+              className="block text-[#3a1f2b]"
+              initial={{ opacity: 0, y: 60 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1.2, delay: 0.8, ease: [0.22, 1, 0.36, 1] }}
+            >
+              Gehena
+            </motion.span>
+            <motion.span
+              className="block italic bg-gradient-to-r from-pink-500 via-rose-400 to-fuchsia-500 bg-clip-text text-transparent"
+              initial={{ opacity: 0, y: 60 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1.2, delay: 1.1, ease: [0.22, 1, 0.36, 1] }}
+              style={{ backgroundSize: '200% auto' }}
+            >
+              Jaipur
+            </motion.span>
+          </h1>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1.5, delay: 1.8 }}
+            className="text-[#5a3d4a] text-base sm:text-lg italic max-w-xl mx-auto mb-12 leading-relaxed"
+            style={{ fontFamily: 'Georgia, serif' }}
+          >
+            "Not a shop. A quiet room in the Pink City where stones remember
+            the hands that shaped them."
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1, delay: 2.2 }}
+            className="flex items-center justify-center gap-3"
+          >
+            <span className="w-8 h-px bg-pink-400/60" />
+            <span className="text-pink-600/80 text-xs tracking-[0.3em] font-medium">
+              SINCE 1962
+            </span>
+            <span className="w-8 h-px bg-pink-400/60" />
+          </motion.div>
+        </div>
+
+        {/* Scroll hint */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 2.8, duration: 1 }}
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-3"
+        >
+          <span className="text-[10px] tracking-[0.4em] text-pink-500/70 font-medium">
+            DESCEND
+          </span>
+          <motion.div
+            animate={{ y: [0, 8, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="w-px h-12 bg-gradient-to-b from-pink-500/70 to-transparent"
+          />
+        </motion.div>
+      </section>
+
+      {/* ═══════════════════════════════════════════
+          ACT II — THE VAULT
+      ═══════════════════════════════════════════ */}
+      <section
+        ref={(el) => (chapterRefs.current[1] = el)}
+        className="relative min-h-screen py-32 px-6 overflow-hidden"
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-[#fff5f7] via-[#fce7f0] to-[#fff5f7]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,_rgba(236,72,153,0.12),_transparent_50%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_50%,_rgba(217,70,239,0.1),_transparent_50%)]" />
+
+        <div className="relative max-w-7xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="text-center mb-20"
+          >
+            <span className="text-[10px] tracking-[0.5em] text-pink-600/80 font-semibold">
+              CHAPTER II
+            </span>
+            <h2
+              className="text-5xl md:text-7xl font-light text-[#3a1f2b] mt-4 mb-6"
+              style={{ fontFamily: 'Georgia, serif' }}
+            >
+              The <span className="italic bg-gradient-to-r from-pink-500 to-fuchsia-500 bg-clip-text text-transparent">Vault</span>
+            </h2>
+            <p className="text-[#5a3d4a] max-w-2xl mx-auto text-lg italic" style={{ fontFamily: 'Georgia, serif' }}>
+              Four stones. Four moods. Each one chosen by hand, cut to reveal
+              what light wants to see.
+            </p>
+          </motion.div>
+
+          {/* Rotating orbit showcase */}
+          <div className="relative h-[600px] flex items-center justify-center">
+            <motion.div
+              className="absolute w-[500px] h-[500px] border border-pink-400/30 rounded-full"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 60, repeat: Infinity, ease: 'linear' }}
+            >
+              <div className="absolute inset-8 border border-dashed border-fuchsia-400/30 rounded-full" />
+              <div className="absolute inset-20 border border-pink-400/20 rounded-full" />
             </motion.div>
-            
-            <motion.h1 
-              className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-tight mb-6"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
+
+            {[
+              { name: 'Rose Quartz', hue: 'from-rose-300 to-pink-500', angle: 0, glyph: '◦' },
+              { name: 'Kashmir Sapphire', hue: 'from-indigo-300 to-violet-500', angle: 90, glyph: '◆' },
+              { name: 'Jaipur Ruby', hue: 'from-rose-400 to-red-500', angle: 180, glyph: '❖' },
+              { name: 'Emerald of Mor Bagh', hue: 'from-emerald-300 to-teal-500', angle: 270, glyph: '✺' },
+            ].map((gem, i) => {
+              const radius = 250;
+              const rad = (gem.angle * Math.PI) / 180;
+              const x = Math.cos(rad) * radius;
+              const y = Math.sin(rad) * radius;
+              return (
+                <motion.div
+                  key={gem.name}
+                  className="absolute"
+                  style={{ x, y }}
+                  initial={{ opacity: 0, scale: 0 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.3 + i * 0.15, type: 'spring', stiffness: 120 }}
+                >
+                  <motion.div
+                    className="relative"
+                    animate={{ y: [0, -12, 0] }}
+                    transition={{
+                      duration: 4 + i * 0.5,
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                      delay: i * 0.3,
+                    }}
+                  >
+                    <div
+                      className={`absolute -inset-8 bg-gradient-to-br ${gem.hue} opacity-40 blur-2xl rounded-full`}
+                    />
+                    <div className="relative w-32 h-32 rounded-full bg-white/80 backdrop-blur-sm border border-pink-200 flex items-center justify-center shadow-xl">
+                      <div className="text-center">
+                        <div
+                          className={`text-5xl mb-1 bg-gradient-to-br ${gem.hue} bg-clip-text text-transparent`}
+                        >
+                          {gem.glyph}
+                        </div>
+                      </div>
+                    </div>
+                    <motion.p
+                      className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] tracking-[0.3em] text-pink-600/70 font-medium"
+                      initial={{ opacity: 0 }}
+                      whileInView={{ opacity: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: 0.6 + i * 0.15 }}
+                    >
+                      {gem.name.toUpperCase()}
+                    </motion.p>
+                  </motion.div>
+                </motion.div>
+              );
+            })}
+
+            <motion.div
+              className="relative text-center max-w-xs"
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 1, delay: 0.5 }}
             >
-              <span className="text-[#2d1b1b]">Timeless</span>
-              <br />
-              <motion.span 
-                className="bg-gradient-to-r from-pink-600 via-pink-500 to-amber-400 bg-clip-text text-transparent inline-block"
-                animate={{
-                  backgroundPosition: ['0%', '100%', '0%'],
-                }}
-                transition={{
-                  duration: 6,
-                  repeat: Infinity,
-                  ease: "linear"
-                }}
-                style={{ backgroundSize: '200%' }}
+              <p className="text-pink-700/90 text-sm italic leading-loose" style={{ fontFamily: 'Georgia, serif' }}>
+                Every gem has a story.
+                <br />
+                Only one will be yours.
+              </p>
+            </motion.div>
+          </div>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="text-center text-pink-700/60 text-sm mt-16 italic"
+            style={{ fontFamily: 'Georgia, serif' }}
+          >
+            The full gemstone library is shared privately, in person.
+          </motion.p>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════
+          ACT III — THE HAND
+      ═══════════════════════════════════════════ */}
+      <section
+        ref={(el) => (chapterRefs.current[2] = el)}
+        className="relative min-h-[200vh] py-32"
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-[#fff5f7] via-[#fce7f0] to-[#fff5f7]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,_rgba(236,72,153,0.1),_transparent_50%)]" />
+
+        <div className="sticky top-0 h-screen flex items-center">
+          <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center w-full">
+            <div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true }}
               >
-                Elegance
-              </motion.span>
-            </motion.h1>
-            
-            <motion.p 
-              className="text-[#5a3d3d] text-lg md:text-xl mb-8 max-w-lg mx-auto md:mx-0 leading-relaxed"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.6 }}
+                <span className="text-[10px] tracking-[0.5em] text-pink-600/80 font-semibold">
+                  CHAPTER III
+                </span>
+                <h2
+                  className="text-5xl md:text-6xl font-light text-[#3a1f2b] mt-4 mb-8 leading-tight"
+                  style={{ fontFamily: 'Georgia, serif' }}
+                >
+                  The <span className="italic bg-gradient-to-r from-pink-500 to-rose-500 bg-clip-text text-transparent">Hand</span>
+                  <br />
+                  that shapes
+                </h2>
+              </motion.div>
+
+              <div className="space-y-8">
+                {[
+                  {
+                    step: 'I',
+                    title: 'Sourcing',
+                    body:
+                      'Our buyers travel to Ratnapura, Kashmir, and Zambia — meeting cutters whose families have handled rough stones for four generations.',
+                  },
+                  {
+                    step: 'II',
+                    title: 'Drawing',
+                    body:
+                      'Every design begins on paper, in pencil. Our head designer studies your story before drawing a single line.',
+                  },
+                  {
+                    step: 'III',
+                    title: 'Setting',
+                    body:
+                      'Kundan setting is done by hand — each uncut diamond is pressed into pure gold, one at a time, over weeks.',
+                  },
+                  {
+                    step: 'IV',
+                    title: 'Finishing',
+                    body:
+                      'The final polish takes 40 hours. It is the moment the piece becomes an heirloom.',
+                  },
+                ].map((item, i) => (
+                  <motion.div
+                    key={item.step}
+                    initial={{ opacity: 0, x: -40 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true, margin: '-100px' }}
+                    transition={{ duration: 0.8, delay: i * 0.1 }}
+                    className="flex gap-5 group"
+                  >
+                    <div className="shrink-0">
+                      <div className="w-12 h-12 rounded-full border-2 border-pink-400/60 bg-white/70 flex items-center justify-center text-pink-600 text-sm font-semibold group-hover:bg-pink-100 transition-colors shadow-sm">
+                        {item.step}
+                      </div>
+                    </div>
+                    <div>
+                      <h3
+                        className="text-xl text-[#3a1f2b] mb-2 font-semibold"
+                        style={{ fontFamily: 'Georgia, serif' }}
+                      >
+                        {item.title}
+                      </h3>
+                      <p className="text-[#5a3d4a]/90 text-sm leading-relaxed">
+                        {item.body}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Right: visual craft diagram */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 1.2 }}
+              className="relative hidden lg:block"
             >
-              Discover our curated collection of handcrafted fine jewellery, 
-              designed to celebrate your unique beauty and style.
-            </motion.p>
-            
-            <motion.div 
-              className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.8 }}
+              <div className="relative aspect-square max-w-lg mx-auto">
+                {[0, 1, 2, 3].map((i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute inset-0 rounded-full border border-pink-400/30"
+                    style={{ inset: `${i * 40}px` }}
+                    animate={{ rotate: i % 2 === 0 ? 360 : -360 }}
+                    transition={{
+                      duration: 40 + i * 15,
+                      repeat: Infinity,
+                      ease: 'linear',
+                    }}
+                  >
+                    {Array.from({ length: 12 - i * 2 }).map((_, j) => {
+                      const angle = (j / (12 - i * 2)) * 360;
+                      const rad = (angle * Math.PI) / 180;
+                      return (
+                        <div
+                          key={j}
+                          className="absolute w-1.5 h-1.5 rounded-full bg-pink-500/70"
+                          style={{
+                            left: `calc(50% + ${Math.cos(rad) * (50 - i * 10)}%)`,
+                            top: `calc(50% + ${Math.sin(rad) * (50 - i * 10)}%)`,
+                            transform: 'translate(-50%, -50%)',
+                          }}
+                        />
+                      );
+                    })}
+                  </motion.div>
+                ))}
+
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <motion.div
+                    animate={{ rotate: -360 }}
+                    transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
+                    className="text-8xl"
+                  >
+                    <span className="bg-gradient-to-br from-pink-500 via-rose-400 to-fuchsia-500 bg-clip-text text-transparent">
+                      ✦
+                    </span>
+                  </motion.div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════
+          ACT IV — THE HEIRLOOM
+      ═══════════════════════════════════════════ */}
+      <section
+        ref={(el) => (chapterRefs.current[3] = el)}
+        className="relative py-32 px-6 overflow-hidden min-h-screen flex items-center"
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-[#fce7f0] via-[#fff5f7] to-[#f8d5e3]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,_rgba(236,72,153,0.15),_transparent_50%)]" />
+
+        {/* Cursor-follow glow */}
+        <motion.div
+          className="pointer-events-none fixed w-64 h-64 rounded-full bg-pink-400/20 blur-3xl z-0 hidden lg:block"
+          animate={{
+            x: cursor.x - 128,
+            y: cursor.y - 128,
+          }}
+          transition={{ type: 'spring', stiffness: 50, damping: 20, mass: 0.5 }}
+        />
+
+        <div className="relative max-w-6xl mx-auto z-20">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="text-center mb-20"
+          >
+            <span className="text-[10px] tracking-[0.5em] text-pink-600/80 font-semibold">
+              CHAPTER IV
+            </span>
+            <h2
+              className="text-5xl md:text-7xl font-light text-[#3a1f2b] mt-4 mb-6"
+              style={{ fontFamily: 'Georgia, serif' }}
             >
-              <motion.button 
-                className="group bg-gradient-to-r from-pink-600 to-pink-400 text-white px-10 py-4 rounded-full text-lg font-semibold hover:shadow-2xl hover:shadow-pink-300/40 transform hover:-translate-y-1 transition-all duration-300 flex items-center gap-2"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Explore Collection
-                <motion.span 
-                  className="group-hover:translate-x-1 transition-transform"
+              The <span className="italic bg-gradient-to-r from-pink-500 to-rose-500 bg-clip-text text-transparent">Heirloom</span>
+            </h2>
+            <p className="text-[#5a3d4a] max-w-2xl mx-auto italic" style={{ fontFamily: 'Georgia, serif' }}>
+              Some pieces are bought. Some are inherited. The lucky ones are both.
+            </p>
+          </motion.div>
+
+          <div className="relative">
+            <div className="absolute top-1/2 left-0 right-0 h-px bg-gradient-to-r from-transparent via-pink-400/50 to-transparent" />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+              {[
+                {
+                  year: '1978',
+                  title: 'The First Commission',
+                  body:
+                    'A Jaipur princess asked our founder to design her daughter\'s wedding set. It took 11 months. It was worth every day.',
+                  rotate: -2,
+                },
+                {
+                  year: '2004',
+                  title: 'Returned to Us',
+                  body:
+                    'That same set came back for restoration. Two generations had worn it. We added nothing. We only polished.',
+                  rotate: 1,
+                },
+                {
+                  year: '2024',
+                  title: 'Handed Forward',
+                  body:
+                    'Today it lives with the granddaughter — who now commissions her own pieces. The circle continues.',
+                  rotate: -1,
+                },
+              ].map((card, i) => (
+                <motion.div
+                  key={card.year}
+                  initial={{ opacity: 0, y: 60, rotate: 0 }}
+                  whileInView={{ opacity: 1, y: 0, rotate: card.rotate }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.9, delay: i * 0.2 }}
+                  whileHover={{ y: -12, rotate: 0, scale: 1.02 }}
+                  className="relative p-8 rounded-3xl bg-white/90 backdrop-blur-sm shadow-xl border-2 border-pink-100"
+                >
+                  {/* Vintage stamp corner */}
+                  <div className="absolute top-4 right-4 w-12 h-14 border-2 border-dashed border-pink-400/40 rounded-sm flex items-center justify-center bg-pink-50/50">
+                    <span className="text-[8px] text-pink-600/70 tracking-wider font-semibold">1962</span>
+                  </div>
+
+                  {/* Postmark circle */}
+                  <div className="absolute top-4 left-4 w-10 h-10 rounded-full border-2 border-pink-400/40 flex items-center justify-center bg-pink-50/50">
+                    <span className="text-[8px] text-pink-600/70 font-semibold">JAIPUR</span>
+                  </div>
+
+                  <div className="mt-12">
+                    <p
+                      className="text-5xl font-light bg-gradient-to-br from-pink-400 to-fuchsia-500 bg-clip-text text-transparent mb-3"
+                      style={{ fontFamily: 'Georgia, serif' }}
+                    >
+                      {card.year}
+                    </p>
+                    <h3
+                      className="text-xl text-[#3a1f2b] mb-3 font-semibold"
+                      style={{ fontFamily: 'Georgia, serif' }}
+                    >
+                      {card.title}
+                    </h3>
+                    <p className="text-sm text-[#5a3d4a]/90 leading-relaxed">
+                      {card.body}
+                    </p>
+                  </div>
+
+                  <div className="mt-6 flex items-center gap-2">
+                    <span className="w-6 h-px bg-pink-400/60" />
+                    <span className="text-pink-500 text-xs">✦</span>
+                    <span className="flex-1 h-px bg-pink-300/50" />
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.8 }}
+            className="text-center text-[#5a3d4a]/70 italic text-sm mt-20 max-w-xl mx-auto"
+            style={{ fontFamily: 'Georgia, serif' }}
+          >
+            We do not sell jewellery. We make objects that outlive their owners.
+          </motion.p>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════
+          ACT V — THE INVITATION
+      ═══════════════════════════════════════════ */}
+      <section
+        ref={(el) => (chapterRefs.current[4] = el)}
+        className="relative min-h-screen flex items-center justify-center px-6 py-32"
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-[#fff5f7] via-[#fce7f0] to-[#fff5f7]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(236,72,153,0.15),_transparent_60%)]" />
+
+        <div className="absolute top-12 left-12 w-16 h-16 border-l-2 border-t-2 border-pink-400/40 rounded-tl-3xl" />
+        <div className="absolute top-12 right-12 w-16 h-16 border-r-2 border-t-2 border-pink-400/40 rounded-tr-3xl" />
+        <div className="absolute bottom-12 left-12 w-16 h-16 border-l-2 border-b-2 border-pink-400/40 rounded-bl-3xl" />
+                <div className="absolute bottom-12 right-12 w-16 h-16 border-r-2 border-b-2 border-pink-400/40 rounded-br-3xl" />
+
+        <div className="relative text-center max-w-3xl z-20">
+          {/* Ornament */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 1 }}
+            className="mb-10 flex justify-center"
+          >
+            <div className="relative">
+              <motion.div
+                className="w-24 h-24 rounded-full border-2 border-pink-400/50"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
+              />
+              <motion.div
+                className="absolute inset-3 rounded-full border border-fuchsia-400/40"
+                animate={{ rotate: -360 }}
+                transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-3xl bg-gradient-to-br from-pink-500 to-fuchsia-500 bg-clip-text text-transparent">
+                  ✦
+                </span>
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="text-[10px] tracking-[0.5em] text-pink-600/80 mb-6 font-semibold"
+          >
+            THE INVITATION
+          </motion.p>
+
+          <motion.h2
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 1 }}
+            className="text-4xl md:text-6xl lg:text-7xl font-light text-[#3a1f2b] leading-tight mb-8"
+            style={{ fontFamily: 'Georgia, serif' }}
+          >
+            Come see us
+            <br />
+            <span className="italic bg-gradient-to-r from-pink-500 via-rose-400 to-fuchsia-500 bg-clip-text text-transparent">
+              in person
+            </span>
+          </motion.h2>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 1, delay: 0.3 }}
+            className="text-[#5a3d4a] text-lg italic max-w-xl mx-auto mb-12 leading-relaxed"
+            style={{ fontFamily: 'Georgia, serif' }}
+          >
+            We don't do online carts, express shipping, or seasonal sales. We
+            do tea, conversation, and stones that wait for the right person.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8, delay: 0.5 }}
+            className="flex flex-col sm:flex-row gap-5 justify-center items-center"
+          >
+            <motion.a
+              href="#book"
+              whileHover={{ y: -3 }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative px-10 py-4 text-white overflow-hidden rounded-full shadow-lg shadow-pink-300/40 hover:shadow-2xl hover:shadow-pink-400/50 transition-shadow"
+            >
+              <span className="absolute inset-0 bg-gradient-to-r from-pink-500 via-rose-500 to-fuchsia-500" />
+              <motion.span
+                className="absolute inset-0 bg-gradient-to-r from-fuchsia-500 via-rose-500 to-pink-500"
+                initial={{ opacity: 0 }}
+                whileHover={{ opacity: 1 }}
+                transition={{ duration: 0.4 }}
+              />
+              <span className="relative flex items-center gap-3 text-sm tracking-[0.2em] font-semibold">
+                BOOK A PRIVATE VIEWING
+                <motion.span
                   animate={{ x: [0, 5, 0] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
                 >
                   →
                 </motion.span>
-              </motion.button>
-              <motion.button 
-                className="bg-white/90 backdrop-blur-sm text-[#2d1b1b] px-10 py-4 rounded-full text-lg font-semibold hover:shadow-xl hover:bg-white transition-all duration-300 border border-pink-200"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                View Lookbook
-              </motion.button>
-            </motion.div>
-            
-            {/* Stats */}
-            <motion.div 
-              className="flex gap-8 mt-8 justify-center md:justify-start"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 1 }}
-            >
-              {[
-                { number: '500+', label: 'Happy Clients' },
-                { number: '50+', label: 'Award Winning' },
-                { number: '4.9★', label: 'Average Rating' }
-              ].map((stat, index) => (
-                <motion.div 
-                  key={index}
-                  whileHover={{ scale: 1.1 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                >
-                  <p className="text-2xl font-bold text-pink-600">{stat.number}</p>
-                  <p className="text-sm text-[#5a3d3d]">{stat.label}</p>
-                </motion.div>
-              ))}
-            </motion.div>
-          </motion.div>
-          
-          <motion.div 
-            className="flex-1 w-full relative"
-            initial={{ x: 50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-          >
-            <motion.div 
-              className="relative h-64 sm:h-80 md:h-[450px] rounded-3xl overflow-hidden shadow-2xl ring-2 ring-white/50"
-              whileHover={{ scale: 1.02 }}
-              transition={{ type: "spring", stiffness: 300 }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-pink-200 to-pink-300 bg-[url('https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=800&h=600&fit=crop')] bg-cover bg-center"></div>
-              <div className="absolute inset-0 bg-gradient-to-t from-pink-900/20 to-transparent"></div>
-              
-              {/* Floating Badges */}
-              <motion.div 
-                className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-bold text-pink-600 shadow-lg"
-                variants={floatVariants}
-                animate="animate"
-              >
-                ✨ 15% off
-              </motion.div>
-              <motion.div 
-                className="absolute bottom-4 left-4 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-full text-sm text-white font-medium"
-                whileHover={{ scale: 1.1 }}
-              >
-                📸 2.5k+ likes
-              </motion.div>
-            </motion.div>
-          </motion.div>
-        </div>
-      </motion.section>
-
-      {/* ===== Category Filters ===== */}
-      <motion.div 
-        className="flex flex-wrap justify-center gap-3 py-6 mb-4"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.2 }}
-      >
-        {categories.map((category, index) => (
-          <motion.button
-            key={category}
-            onClick={() => setActiveCategory(category)}
-            className={`px-7 py-3 rounded-full font-medium transition-all duration-300 ${
-              activeCategory === category
-                ? 'bg-gradient-to-r from-pink-600 to-pink-400 text-white shadow-xl shadow-pink-300/30 scale-105'
-                : 'bg-white/80 backdrop-blur-sm border-2 border-pink-200 text-[#4a2c2c] hover:bg-pink-50 hover:border-pink-400 hover:scale-105'
-            }`}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
-          >
-            {category}
-            {category !== 'All' && (
-              <span className="ml-2 text-xs opacity-70">
-                ({products.filter(p => p.category === category).length})
               </span>
-            )}
-          </motion.button>
-        ))}
-      </motion.div>
+            </motion.a>
 
-      {/* ===== Product Grid ===== */}
-      <motion.section 
-        className="py-8 pb-20"
-        id="collection"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <div className="flex justify-between items-end mb-12">
-          <div>
-            <motion.h2 
-              className="text-4xl md:text-5xl font-bold text-[#2d1b1b]"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
+            <motion.a
+              href="#visit"
+              whileHover={{ y: -3 }}
+              whileTap={{ scale: 0.98 }}
+              className="text-[#5a3d4a] hover:text-pink-600 text-sm tracking-[0.2em] transition-colors px-6 py-4 font-semibold"
             >
-              Our <span className="bg-gradient-to-r from-pink-600 to-pink-400 bg-clip-text text-transparent">Collection</span>
-            </motion.h2>
-            <motion.p 
-              className="text-[#5a3d3d] mt-2 text-lg"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              {filteredProducts.length} exquisite pieces waiting for you
-            </motion.p>
-          </div>
-          <motion.button 
-            className="text-pink-600 font-semibold hover:text-pink-700 transition-colors hidden sm:block"
-            whileHover={{ x: 5 }}
-          >
-            View All →
-          </motion.button>
-        </div>
-        
-        <motion.div 
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8"
-          variants={containerVariants}
-        >
-          <AnimatePresence>
-            {filteredProducts.map((product, index) => (
-              <motion.div 
-                key={product.id}
-                variants={itemVariants}
-                layout
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ 
-                  type: "spring",
-                  stiffness: 260,
-                  damping: 20,
-                  delay: index * 0.05 
-                }}
-                className="group bg-white rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl hover:shadow-pink-200/50 transition-all duration-500 transform hover:-translate-y-3 relative"
-                onMouseEnter={() => setHoveredProduct(product.id)}
-                onMouseLeave={() => setHoveredProduct(null)}
-                whileHover={{ y: -10 }}
-              >
-                {/* Image Section */}
-                <div className="relative overflow-hidden h-80 bg-gradient-to-br from-pink-50 to-pink-100">
-                  {/* Badges */}
-                  <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
-                    {product.badge && (
-                      <motion.span 
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-gradient-to-r ${product.badgeColor} text-white shadow-lg`}
-                        initial={{ x: -50, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 0.2 }}
-                      >
-                        {product.badge}
-                      </motion.span>
-                    )}
-                    {product.isNew && (
-                      <motion.span 
-                        className="bg-gradient-to-r from-emerald-400 to-emerald-500 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-white shadow-lg"
-                        initial={{ x: -50, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 0.3 }}
-                      >
-                        ✨ Just In
-                      </motion.span>
-                    )}
-                    {product.isSale && (
-                      <motion.span 
-                        className="bg-gradient-to-r from-red-400 to-red-500 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-white shadow-lg animate-pulse"
-                        initial={{ x: -50, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 0.4 }}
-                      >
-                        🔥 Sale
-                      </motion.span>
-                    )}
-                  </div>
-                  
-                  {/* Wishlist Button */}
-                  <motion.button 
-                    className="absolute top-4 right-4 z-10 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-pink-50 transition-all duration-300 shadow-lg"
-                    whileHover={{ scale: 1.2, rotate: 10 }}
-                    whileTap={{ scale: 0.9 }}
-                  >
-                    <span className="text-xl">♡</span>
-                  </motion.button>
-                  
-                  {/* Product Image */}
-                  <motion.img 
-                    src={product.image} 
-                    alt={product.name}
-                    className="w-full h-full object-cover"
-                    whileHover={{ scale: 1.1 }}
-                    transition={{ duration: 0.6 }}
-                  />
-                  
-                  {/* Overlay on Hover */}
-                  <motion.div 
-                    className={`absolute inset-0 bg-gradient-to-t from-pink-900/40 via-transparent to-transparent transition-opacity duration-500 flex items-end justify-center pb-6`}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: hoveredProduct === product.id ? 1 : 0 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <motion.button 
-                      onClick={() => handleAddToCart(product)}
-                      className="bg-gradient-to-r from-pink-600 to-pink-400 text-white px-8 py-3.5 rounded-full font-semibold text-sm hover:shadow-xl hover:shadow-pink-300/40 whitespace-nowrap flex items-center gap-2"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ type: "spring", stiffness: 300 }}
-                    >
-                      <span className="text-lg">+</span> Add to Wishlist
-                    </motion.button>
-                  </motion.div>
-                </div>
-                
-                {/* Product Info */}
-                <motion.div 
-                  className="p-6"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.1 }}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs text-pink-600 font-semibold uppercase tracking-wider bg-pink-50 px-3 py-1 rounded-full">
-                      {product.category}
-                    </span>
-                    <motion.div 
-                      className="flex items-center gap-1 text-sm text-[#5a3d3d]"
-                      whileHover={{ scale: 1.1 }}
-                    >
-                      <span className="text-yellow-400">★</span>
-                      {product.rating}
-                      <span className="text-xs text-[#5a3d3d]/60">({product.reviews})</span>
-                    </motion.div>
-                  </div>
-                  
-                  <motion.h3 
-                    className="text-xl font-bold text-[#2d1b1b] mt-2 group-hover:text-pink-600 transition-colors"
-                    whileHover={{ x: 5 }}
-                  >
-                    {product.name}
-                  </motion.h3>
-                  
-                  <motion.p 
-                    className="text-[#5a3d3d]/80 text-sm mt-2 leading-relaxed line-clamp-2"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.2 }}
-                  >
-                    {product.description}
-                  </motion.p>
-
-                  {/* Features Tags */}
-                  <div className="flex flex-wrap gap-1 mt-3">
-                    {product.features.slice(0, 2).map((feature, idx) => (
-                      <motion.span 
-                        key={idx}
-                        className="text-xs bg-pink-50 text-pink-600 px-2 py-1 rounded-full"
-                        whileHover={{ scale: 1.05 }}
-                      >
-                        {feature}
-                      </motion.span>
-                    ))}
-                    {product.features.length > 2 && (
-                      <span className="text-xs text-[#5a3d3d]/50">+{product.features.length - 2}</span>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center gap-3 mt-4">
-                    <motion.span 
-                      className="text-2xl font-bold text-pink-600"
-                      whileHover={{ scale: 1.1 }}
-                    >
-                      {product.price}
-                    </motion.span>
-                    {product.originalPrice && (
-                      <span className="text-[#5a3d3d]/50 text-sm line-through">
-                        {product.originalPrice}
-                      </span>
-                    )}
-                    {product.originalPrice && (
-                      <motion.span 
-                        className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-full"
-                        animate={{
-                          scale: [1, 1.1, 1],
-                        }}
-                        transition={{
-                          duration: 1.5,
-                          repeat: Infinity,
-                          ease: "easeInOut"
-                        }}
-                      >
-                        Save {Math.round((1 - parseFloat(product.price.replace('$', '')) / parseFloat(product.originalPrice.replace('$', ''))) * 100)}%
-                      </motion.span>
-                    )}
-                  </div>
-                  
-                  {/* Quick Actions */}
-                  <div className="flex gap-2 mt-4 pt-4 border-t border-pink-50">
-                    <motion.button 
-                      className="flex-1 bg-gradient-to-r from-pink-600 to-pink-400 text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:shadow-lg hover:shadow-pink-300/30 transition-all duration-300"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      Quick View
-                    </motion.button>
-                    <motion.button 
-                      className="px-4 py-2.5 rounded-xl border-2 border-pink-200 hover:border-pink-400 hover:bg-pink-50 transition-all duration-300 text-[#2d1b1b] font-semibold text-sm"
-                      whileHover={{ scale: 1.05, rotate: 10 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      🔍
-                    </motion.button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
-      </motion.section>
-
-      {/* ===== Featured Banner ===== */}
-      <motion.section 
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-pink-600 via-pink-500 to-amber-400 p-8 md:p-12 my-12 text-white"
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.6 }}
-        whileHover={{ scale: 1.01 }}
-      >
-        <motion.div 
-          className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl"
-          animate={{
-            x: [0, -20, 0],
-            y: [0, 20, 0],
-          }}
-          transition={{
-            duration: 5,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div 
-          className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full blur-2xl"
-          animate={{
-            x: [0, 20, 0],
-            y: [0, -20, 0],
-          }}
-          transition={{
-            duration: 4,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: 1
-          }}
-        />
-        
-        <div className="relative flex flex-col md:flex-row items-center justify-between gap-8">
-          <div className="flex-1 text-center md:text-left">
-            <motion.span 
-              className="inline-block bg-white/20 backdrop-blur-sm px-4 py-1.5 rounded-full text-sm font-semibold mb-4"
-              animate={{
-                scale: [1, 1.05, 1],
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
-            >
-              ✦ Limited Edition
-            </motion.span>
-            <motion.h3 
-              className="text-3xl md:text-4xl font-bold mb-3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-            >
-              Exclusive Pink Collection
-            </motion.h3>
-            <motion.p 
-              className="text-white/90 text-lg max-w-md mx-auto md:mx-0"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
-            >
-              Be the first to own our limited edition rose gold collection. Only 100 pieces available.
-            </motion.p>
-          </div>
-          <motion.button 
-            className="bg-white text-pink-600 px-10 py-4 rounded-full font-bold hover:shadow-2xl transition-all duration-300 whitespace-nowrap"
-            whileHover={{ scale: 1.1, rotate: -2 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            Shop Now →
-          </motion.button>
-        </div>
-      </motion.section>
-
-      {/* ===== Newsletter ===== */}
-      <motion.section 
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-pink-100 via-pink-50 to-pink-100 p-8 sm:p-12 md:p-16 my-8 text-center border-2 border-white/50 shadow-xl"
-        initial={{ opacity: 0, y: 50 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8 }}
-      >
-        <motion.div 
-          className="absolute top-0 right-0 w-40 h-40 bg-pink-300/20 rounded-full blur-2xl"
-          animate={{
-            scale: [1, 1.2, 1],
-          }}
-          transition={{
-            duration: 4,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div 
-          className="absolute bottom-0 left-0 w-40 h-40 bg-pink-400/10 rounded-full blur-2xl"
-          animate={{
-            scale: [1, 1.3, 1],
-          }}
-          transition={{
-            duration: 5,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: 1
-          }}
-        />
-        
-        <div className="relative">
-          <motion.div 
-            className="text-6xl mb-4"
-            animate={{
-              rotate: [0, 10, -10, 0],
-            }}
-            transition={{
-              duration: 4,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-          >
-            💎
+              VISIT THE ATELIER
+            </motion.a>
           </motion.div>
-          <motion.h2 
-            className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#2d1b1b] mb-3"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            Join the <span className="bg-gradient-to-r from-pink-600 to-pink-400 bg-clip-text text-transparent">LUXE</span> Circle
-          </motion.h2>
-          <motion.p 
-            className="text-[#5a3d3d] max-w-md mx-auto mb-8 text-lg"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-          >
-            Subscribe for exclusive access to new collections, private sales, and jewellery styling tips.
-          </motion.p>
-          <motion.div 
-            className="flex flex-col sm:flex-row justify-center gap-3 max-w-lg mx-auto"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.6 }}
-          >
-            <motion.input 
-              type="email" 
-              placeholder="Enter your email address"
-              className="flex-1 px-6 py-4 rounded-full border-2 border-pink-200 shadow-lg focus:ring-4 focus:ring-pink-300 outline-none text-[#2d1b1b] bg-white/80 backdrop-blur-sm"
-              whileFocus={{ scale: 1.02 }}
-            />
-            <motion.button 
-              className="bg-gradient-to-r from-pink-600 to-pink-400 text-white px-10 py-4 rounded-full font-semibold hover:shadow-2xl hover:shadow-pink-300/30 transition-all duration-300 flex items-center justify-center gap-2"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              Subscribe
-              <motion.span
-                animate={{ x: [0, 5, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              >
-                →
-              </motion.span>
-            </motion.button>
-          </motion.div>
-          <motion.p 
-            className="text-xs text-[#5a3d3d]/60 mt-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.8 }}
-          >
-            ✦ No spam. Unsubscribe anytime.
-          </motion.p>
-        </div>
-      </motion.section>
 
-      {/* ===== CSS Animations ===== */}
-      <style jsx>{`
-        @keyframes slideInRight {
-          from {
-            transform: translateX(100px);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-        
-        .animate-slide-in-right {
-          animation: slideInRight 0.5s ease-out forwards;
-        }
-        
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
-        }
-        
-        .animate-float {
-          animation: float 3s ease-in-out infinite;
-        }
+          {/* Atelier details */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 1, delay: 0.8 }}
+            className="mt-20 pt-10 border-t border-pink-200/60 max-w-lg mx-auto"
+          >
+            <div className="grid grid-cols-2 gap-8 text-left">
+              <div>
+                <p className="text-[10px] tracking-[0.3em] text-pink-600/80 mb-2 font-semibold">
+                  ATELIER
+                </p>
+                <p className="text-[#5a3d4a] text-sm leading-relaxed">
+                  24, Johari Bazaar
+                  <br />
+                  Near Hawa Mahal
+                  <br />
+                  Jaipur 302003
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] tracking-[0.3em] text-pink-600/80 mb-2 font-semibold">
+                  HOURS
+                </p>
+                <p className="text-[#5a3d4a] text-sm leading-relaxed">
+                  Mon – Sat
+                  <br />
+                  10:30 – 19:00
+                  <br />
+                  By appointment only
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════
+          CLOSING FOOTER
+      ═══════════════════════════════════════════ */}
+      <footer className="relative py-12 px-6 border-t border-pink-200/60 bg-[#fce7f0]">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-baseline gap-2">
+            <span
+              className="text-sm tracking-[0.2em] text-[#3a1f2b]"
+              style={{ fontFamily: 'Georgia, serif' }}
+            >
+              GEHENA
+            </span>
+            <span className="text-[9px] tracking-[0.4em] text-pink-600/80 font-semibold">
+              JAIPUR
+            </span>
+          </div>
+
+          <p className="text-pink-700/70 text-[10px] tracking-[0.3em] text-center font-medium">
+            ✦ &nbsp; SIXTY-TWO YEARS OF QUIET CRAFT &nbsp; ✦
+          </p>
+
+          <div className="flex items-center gap-6 text-[#5a3d4a]/70 text-[10px] tracking-[0.2em]">
+            <button className="hover:text-pink-600 transition-colors font-medium">
+              INSTAGRAM
+            </button>
+            <button className="hover:text-pink-600 transition-colors font-medium">
+              CONTACT
+            </button>
+          </div>
+        </div>
+      </footer>
+
+      {/* ═══════════════════════════════════════════
+          GLOBAL STYLES
+      ═══════════════════════════════════════════ */}
+      <style>{`
+        html { scroll-behavior: smooth; }
+        body { background: #fff5f7; }
+        ::selection { background: rgba(236, 72, 153, 0.25); color: #3a1f2b; }
       `}</style>
-    </main>
+    </div>
   );
 };
 
